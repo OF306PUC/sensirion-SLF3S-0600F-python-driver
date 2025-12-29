@@ -27,6 +27,7 @@ from port import ShdlcSerialPort
 import os 
 import time 
 import threading
+import argparse
 import core
 import queue as queue_module
 
@@ -34,14 +35,38 @@ serial_port_ = "/dev/ttyUSB1"
 baudrate_ = 115200
 slave_address_ = 0x00       # Sensor Bridge default address. RS485 address is 0
 queue_size_ = 1000
-sampling_interval_ = 5000   # ms
+
+hours_to_log_ = 12.0       # hours
+sampling_interval_ = 500   # ms
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Sensirion SHDLC data logger"
+    )
+    parser.add_argument("--port", type=str, default=serial_port_,
+        help=f"Serial port (default: {serial_port_})"
+    )
+    parser.add_argument("--baudrate", type=int, default=baudrate_,
+        help=f"Serial port baudrate (default: {baudrate_})"
+    )
+    parser.add_argument("--slave-address", type=int, default=slave_address_,
+        help=f"SHDLC slave address (default: {slave_address_})"
+    )
+    parser.add_argument("--hours-to-log", type=float, default=hours_to_log_,
+        help="Number of hours to log data (default: 12.0)"
+    )
+    parser.add_argument("--sampling-ms", type=int, default=sampling_interval_,
+        help="Sampling interval in milliseconds (default: 500)"
+    )
+    return parser.parse_args()
 
 
 def init_csv_logger(file_path, queue): 
     """
     Threaded CSV logger for SHDLC sensor data.
     """
-    data_dir = 'data/'
+    data_dir = 'Temp/'
     os.makedirs(os.path.dirname(data_dir), exist_ok=True)
     with open(data_dir+file_path, 'w') as f: 
         f.write("RelativeTime_s,Flow_ul_min,Flow_ml_hr,FlowTemperature_degC,"\
@@ -57,7 +82,8 @@ def init_csv_logger(file_path, queue):
             f.flush()
 
 
-def in_device_communication(port, baudrate, queue, slave_address, sampling_interval): 
+def in_device_communication(port, baudrate, queue, slave_address, 
+                            hours_to_log=hours_to_log_, sampling_interval=sampling_interval_): 
     """
     Threaded SHDLC device communication via serial port.
     - Reads data from the SHDLC device and puts it into a queue.
@@ -102,11 +128,14 @@ def in_device_communication(port, baudrate, queue, slave_address, sampling_inter
             tx_data=[i2c_header],       # Read measurement command
             rx_length=9,                # 9 bytes max for SLF3S-0600F sensor
             max_response_time=0.1
-        )
+        )  
+
+        seconds_to_log = 3600 * hours_to_log
+        num_measurements = seconds_to_log * 1000 // sampling_interval
+        print(f"Logging for {hours_to_log} hours, total measurements: {num_measurements}")
+        measurement_count = 0
 
         start_time = time.time()
-        num_measurements = 5
-        measurement_count = 0
         while True: 
             if measurement_count >= num_measurements:
                 # Send stop command before breaking
@@ -127,9 +156,9 @@ def in_device_communication(port, baudrate, queue, slave_address, sampling_inter
             
             # print(f"Flow ul/min: {flow_ul_min}, Flow ml/hr: {flow_ml_hr}, Temp degC: {temp},"\
             #       f"Air-in-line: {air_flag}, High-flow: {high_flow_flag}")
-            time_rel = time.time() - start_time
-            queue.put((float(time_rel), float(flow_ul_min), float(flow_ml_hr), \
-                       float(temp), int(air_flag), int(high_flow_flag), int(exp_smoothing)))
+            t = time.time() - start_time
+            queue.put((float(t), float(flow_ul_min), float(flow_ml_hr), float(temp), \
+                       int(air_flag), int(high_flow_flag), int(exp_smoothing)))
 
             t1 = time.time()
             elapsed_ms = (t1 - t0) * 1000
@@ -140,21 +169,39 @@ def in_device_communication(port, baudrate, queue, slave_address, sampling_inter
             measurement_count += 1
 
 
-def main(): 
-    queue_ = queue_module.Queue(maxsize=1000)
+def main():
+    args = parse_args()
+
+    serial_port = args.port
+    baudrate = args.baudrate
+    slave_address = args.slave_address
+    hours_to_log = args.hours_to_log
+    sampling_interval_ms = args.sampling_ms
+
+    print(f"Logging for {hours_to_log} hours")
+    print(f"Sampling interval: {sampling_interval_ms} ms")
+
+    queue_process = queue_module.Queue(maxsize=queue_size_)
+
     t_comm = threading.Thread(
-        target=in_device_communication, 
-        args=(serial_port_, baudrate_, queue_, slave_address_, sampling_interval_), 
-        daemon=True)
+        target=in_device_communication,
+        args=(serial_port, baudrate, queue_process, slave_address,
+            hours_to_log, sampling_interval_ms,),
+        daemon=True,
+    )
+
     t_logger = threading.Thread(
-        target=init_csv_logger, args=("sensor_data_log.csv", queue_), 
-        daemon=True)
+        target=init_csv_logger,
+        args=("DataLog.csv", queue_process,),
+        daemon=True,
+    )
 
     t_comm.start()
     t_logger.start()
 
     while True:
-        time.sleep(1)  # keep main alive
+        time.sleep(1)
+
 
 
 if __name__ == "__main__":
