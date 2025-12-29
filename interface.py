@@ -30,7 +30,7 @@ class ShdlcI2CInterface(object):
         """
         super(ShdlcI2CInterface, self).__init__()
         self._port = port
-        log.debug("Opened ShdlcConnection on '{}'.".format(port.description))
+        log.debug("Opened ShdlcConnection on '{}'.".format(port))
 
     @property
     def port(self):
@@ -56,12 +56,19 @@ class ShdlcI2CInterface(object):
         """
         rx_addr, rx_cmd, rx_state, rx_data = self._port.transceive(
             slave_address, command_id, data, response_timeout)
+        
+        print("--- interface.py ---")                                                                       ####
+        print("Received response - Addr: 0x{:02X}, Cmd: 0x{:02X}, State: 0x{:02X}, Data: [{}]".format(      ####
+            rx_addr, rx_cmd, rx_state,                                                                      ####
+            ", ".join(["0x{:02X}".format(b) for b in bytearray(rx_data)])))                                 ####
+
         if rx_addr != slave_address: 
             raise ValueError("Received response from unexpected slave address "
                             "(expected {}, got {}).".format(slave_address, rx_addr))
         if rx_cmd != command_id: 
             raise ValueError("Received response for unexpected command ID "
                             "(expected 0x{:02X}, got 0x{:02X}).".format(command_id, rx_cmd))
+                            
         error_state = True if rx_state & 0x80 else False # 1000_0000
         if error_state:
             log.warning("SHDLC device with address {} is in error state.".format(slave_address))
@@ -69,8 +76,6 @@ class ShdlcI2CInterface(object):
         if error_code: 
             log.warning("SHDLC device with address {} returned error {}."
                         .format(slave_address, error_code))
-            raise ValueError("SHDLC device with address {} returned error {}."
-                             .format(slave_address, error_code))
         return rx_data, error_state
 
     def i2c_transceive(self, slave_address, command_id, i2c_address, tx_data=b"", rx_length=0, response_timeout=0.1): 

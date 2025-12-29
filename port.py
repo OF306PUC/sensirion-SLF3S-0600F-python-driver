@@ -265,6 +265,7 @@ class ShdlcSerialPort(ShdlcPort):
         response_timeout += self._additional_response_time # add extra time to avoid timeout errors
         total_timeout = response_timeout + self._calculate_maximum_frame_time()
         builder = ShdlcSerialMisoFrameBuilder() # lives in the dynamical memory during the function call (heap stack)
+
         while True: 
             # Fetch all received bytes at once (to get maximum performance) or 
             # wait for at least one bye (with timeout) if the buffer is empty. 
@@ -273,7 +274,7 @@ class ShdlcSerialPort(ShdlcPort):
             # Process received data and return if the frame is complete
             if builder.add_data(new_data): 
                 log.debug("ShdlcSerialPort received raw: [{}]".format(
-                    ", ".join(["0x%.2X" % i for i in bytearray(builder.raw_data)])))
+                    ", ".join(["0x%.2X" % i for i in bytearray(new_data)])))
                 return builder.interpret_data()
             
             # frame not complete yet, check for timeout

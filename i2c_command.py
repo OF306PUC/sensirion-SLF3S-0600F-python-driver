@@ -100,7 +100,7 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
         data.append(i2c_addr)
         data.append(len(tx_data))
         data.append(rx_length)
-        data.extend(self._TIMEOUT_MS)
+        data.extend(self._I2C_TIMEOUT_MS)
         data.extend(tx_data)
         super(ShdlcCmdI2cTransceive, self).__init__(
             data=data,
@@ -138,9 +138,10 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
         flow_raw = (data[0] << 8) | data[1]
         temp_raw = (data[3] << 8) | data[4]
         flags    = (data[6] << 8) | data[7]
-        air_in_line_flag = (flags & 0x0001) != 0  # Bit 0
-        high_flow_flag  = (flags & 0x0002) != 0   # Bit 1
+        air_in_line_flag = (flags & 0x0001) != 0  # Bit 0: Air in line flag
+        high_flow_flag  = (flags & 0x0002) != 0   # Bit 1: High flow flag
+        exp_smoothing = (flags & 0x0006) != 0     # Bit 5: Exponential smoothing active flag (not used here)
 
-        return flow_raw, temp_raw, air_in_line_flag, high_flow_flag
+        return flow_raw, temp_raw, air_in_line_flag, high_flow_flag, exp_smoothing
 
     
