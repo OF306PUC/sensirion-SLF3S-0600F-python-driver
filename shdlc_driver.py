@@ -95,6 +95,7 @@ def in_device_communication(port, baudrate, queue, slave_address,
         get_i2c_addr_cmd = ShdlcCmdGetI2cSlaveAddress()
         i2c_addr, error = interface.execute(slave_address,get_i2c_addr_cmd)
         print(f"Sensor I2C Address: {i2c_addr:#04x}, Error state: {error}")
+        time.sleep(1)
 
         # Stopping continuous measurement 
         transceive_stop_cmd = ShdlcCmdI2cTransceive(
@@ -107,6 +108,7 @@ def in_device_communication(port, baudrate, queue, slave_address,
         print("--- Stopping continuous measurement ---")
         print("Data received from stop command:", data)
         print("Error state from stop command:", error)
+        time.sleep(1)
 
         # I2C Transceive command to start continuous measurement
         transceive_start_cmd = ShdlcCmdI2cTransceive(
@@ -119,6 +121,7 @@ def in_device_communication(port, baudrate, queue, slave_address,
         print("--- Starting continuous measurement ---")
         print("Data received from start command:", data)
         print("Error state from start command:", error)
+        time.sleep(1)
 
         # Read measurement data in a loop
         i2c_header = (ShdlcCmdI2cTransceive._I2C_ADDRESS << 1) | \
@@ -134,6 +137,7 @@ def in_device_communication(port, baudrate, queue, slave_address,
         num_measurements = seconds_to_log * 1000 // sampling_interval
         print(f"Logging for {hours_to_log} hours, total measurements: {num_measurements}")
         measurement_count = 0
+        time.sleep(1)
 
         start_time = time.time()
         while True: 
