@@ -31,7 +31,8 @@ import argparse
 import core
 import queue as queue_module
 
-serial_port_ = "/dev/ttyUSB1"
+# Linux: 
+serial_port_ = "/dev/ttyUSB0"
 baudrate_ = 115200
 slave_address_ = 0x00       # Sensor Bridge default address. RS485 address is 0
 queue_size_ = 1000
