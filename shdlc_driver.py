@@ -37,8 +37,8 @@ baudrate_ = 115200
 slave_address_ = 0x00       # Sensor Bridge default address. RS485 address is 0
 queue_size_ = 1000
 
-hours_to_log_ = 12.0       # hours
-sampling_interval_ = 500   # ms
+hours_to_log_ = 12.0        # hours
+sampling_interval_ = 500    # ms
 
 
 def parse_args():
