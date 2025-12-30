@@ -4,21 +4,40 @@ Sensirion SHDLC Driver Module
 - Uses Sensirion SCC1-RS485 and SCC1-USB adapters for communication.
 """
 
-# In order to run in Raspberry Pi / Linux systems, the following steps are needed to load the FTDI driver:
-"""
-Linux FTDI driver loading: 
-- Run the following as root: 
-    1. modprobe ftdi_sio
-    2. echo 0403 7168 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id
-- The above commands will only add the Sensor Bridge dynamically until reboot. 
-- Automation on startup creating a custom udev rule: 
-    SUBSYSTEMS=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="7168", RUN+="/sbin/modprobe ftdi_sio", RUN+="/bin/sh -c  \
-        'echo 0403 7168 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id'"
-    
-    udevadm control --reload-rules
-    
-    udevadm trigger
-"""
+# USB Serial driver note
+# ---------------------
+# Sensirion SCC1-USB / RS485 adapters use an FTDI USB-to-serial interface.
+# On modern Raspberry Pi OS / Linux systems, the required driver (ftdi_sio)
+# is loaded automatically and no manual setup is needed.
+#
+# If the device does not appear as /dev/ttyUSB*, check:
+#   lsmod | grep ftdi
+#   dmesg | grep ttyUSB
+#
+# Manual driver binding via modprobe/new_id is only required on older
+# kernels or custom Linux images.
+
+
+# Time synchronization requirement
+# -------------------------------
+# Ensure the system clock is synchronized (required for valid timestamps).
+# On Raspberry Pi / Linux (systemd-based), enable NTP with:
+#
+#   sudo timedatectl set-ntp true
+#
+# Verify synchronization with:
+#
+#   timedatectl
+#   timedatectl show -p NTPSynchronized
+#
+# A working network connection is required for initial synchronization.
+# Note:
+# Older systems may use the legacy 'ntp' daemon:
+#   sudo apt-get install ntp
+#   sudo service ntp start
+# Do NOT use this together with systemd-timesyncd.
+
+
 from i2c_command import ShdlcCmdGetI2cSlaveAddress, \
     ShdlcCmdI2cTransceive
 from interface import ShdlcI2CInterface
@@ -27,9 +46,18 @@ from port import ShdlcSerialPort
 import os 
 import time 
 import threading
+import signal 
 import argparse
+import struct
 import core
 import queue as queue_module
+
+BIN_RECORD_FMT = ">dhhb"
+# >  big-endian
+# d  float64 timestamp
+# h  int16 flow
+# h  int16 temp
+# b  uint8 flags
 
 # Linux: 
 serial_port_ = "/dev/ttyUSB0"
@@ -39,6 +67,11 @@ queue_size_ = 1000
 
 hours_to_log_ = 12.0        # hours
 sampling_interval_ = 500    # ms
+
+stopping_event = threading.Event()
+def handle_shutdown(signum, frame): 
+    print("Shutdown signal received. Stopping threads...")
+    stopping_event.set()
 
 
 def parse_args():
@@ -63,24 +96,37 @@ def parse_args():
     return parser.parse_args()
 
 
-def init_csv_logger(file_path, queue): 
+def dual_logger(csv_filename, bin_filename, queue): 
     """
-    Threaded CSV logger for SHDLC sensor data.
+    Threaded CSV-binary logger for SHDLC sensor data.
     """
     data_dir = 'Temp/'
-    os.makedirs(os.path.dirname(data_dir), exist_ok=True)
-    with open(data_dir+file_path, 'w') as f: 
-        f.write("RelativeTime_s,Flow_ul_min,Flow_ml_hr,FlowTemperature_degC,"\
+    os.makedirs(data_dir, exist_ok=True)
+
+    csv_path = os.path.join(data_dir, csv_filename)
+    bin_path = os.path.join(data_dir, bin_filename)
+    with open(csv_path, 'w') as f_csv, open(bin_path, 'wb') as f_bin: 
+        f_csv.write("UTC_Time,Flow_ul_min,FlowTemperature_degC,"\
                 "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
-        while True: 
+        
+        while not stopping_event.is_set() or not queue.empty(): 
             try: 
                 item = queue.get(timeout=1)
             except queue_module.Empty:
                 continue
-            time_rel, flow_ul_min, flow_ml_hr, temp_c, flag_air, flag_high_flow, exp_smoothing = item
-            f.write(f"{time_rel:.6f},{flow_ul_min:.6f},{flow_ml_hr:.6f},{temp_c:.6f}"
+            timestamp, flow_raw, temp_raw, \
+                flag_air, flag_high_flow, exp_smoothing = item
+            
+            flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
+            f_csv.write(f"{timestamp},{flow_uL_min:.8f},{temp_c:.8f}"
                     f",{flag_air},{flag_high_flow},{exp_smoothing}\n")
-            f.flush()
+            f_csv.flush()
+
+            # Write binary record: 
+            # flags = bit0: air_in_line, bit1: high_flow, bit2: exp_smoothing b"XXXX_XXXX"
+            flags = (flag_air << 0) | (flag_high_flow << 1) | (exp_smoothing << 2)
+            f_bin.write(struct.pack(BIN_RECORD_FMT, timestamp, flow_raw, temp_raw, flags))
+            f_bin.flush()
 
 
 def in_device_communication(port, baudrate, queue, slave_address, 
@@ -135,43 +181,42 @@ def in_device_communication(port, baudrate, queue, slave_address,
         )  
 
         seconds_to_log = 3600 * hours_to_log
-        num_measurements = seconds_to_log * 1000 // sampling_interval
+        num_measurements = int(seconds_to_log * 1000 // sampling_interval)
         print(f"Logging for {hours_to_log} hours, total measurements: {num_measurements}")
         measurement_count = 0
         time.sleep(1)
 
-        start_time = time.time()
-        while True: 
-            if measurement_count >= num_measurements:
-                # Send stop command before breaking
-                data, error  = interface.i2c_execute(slave_address, transceive_stop_cmd)
-                print("--- Stopping continuous measurement ---")
-                print("Data received from stop command:", data)
-                print("Error state from stop command:", error)
-                break
-            
-            t0 = time.time()
-            # reading data from sensor: 
-            data, error  = interface.i2c_execute(slave_address, transceive_cmd)    
-            if error: 
-                print("Error state received during measurement read.")
-                continue
-            flow_ul_min, flow_ml_hr, temp, air_flag, high_flow_flag, exp_smoothing = \
-                core.interpret_flow_temp_raw(data)
-            
-            # print(f"Flow ul/min: {flow_ul_min}, Flow ml/hr: {flow_ml_hr}, Temp degC: {temp},"\
-            #       f"Air-in-line: {air_flag}, High-flow: {high_flow_flag}")
-            t = time.time() - start_time
-            queue.put((float(t), float(flow_ul_min), float(flow_ml_hr), float(temp), \
-                       int(air_flag), int(high_flow_flag), int(exp_smoothing)))
+        try: 
+            while not stopping_event.is_set(): 
+                if measurement_count > num_measurements:
+                    stopping_event.set()
+                
+                t0 = time.time()
+                # reading data from sensor: 
+                # data is: (flow_ul_min, temp_c, flag_air, flag_high_flow, exp_smoothing)
+                data, error  = interface.i2c_execute(slave_address, transceive_cmd)    
+                if error: 
+                    print("Error state received during measurement read.")
+                    continue
+                flow_raw, temp_raw, air_flag, high_flow_flag, exp_smoothing = data
+                timestamp = time.time()
+                queue.put((float(timestamp), int(flow_raw), int(temp_raw), \
+                        int(air_flag), int(high_flow_flag), int(exp_smoothing)))
 
-            t1 = time.time()
-            elapsed_ms = (t1 - t0) * 1000
-            sleep_time_ms = sampling_interval - elapsed_ms
-            if sleep_time_ms > 0: 
-                time.sleep(sleep_time_ms / 1000.0)
+                t1 = time.time()
+                elapsed_ms = (t1 - t0) * 1000
+                sleep_time_ms = sampling_interval - elapsed_ms
+                if sleep_time_ms > 0: 
+                    time.sleep(sleep_time_ms / 1000.0)
+                measurement_count += 1
 
-            measurement_count += 1
+        finally: 
+            # Send stop command before ending
+            data, error  = interface.i2c_execute(slave_address, transceive_stop_cmd)
+            print("--- Stopping continuous measurement (shutdown) ---")
+            print("Data received from stop command:", data)
+            print("Error state from stop command:", error)
+            
 
 
 def main():
@@ -186,18 +231,19 @@ def main():
     print(f"Logging for {hours_to_log} hours")
     print(f"Sampling interval: {sampling_interval_ms} ms")
 
-    queue_process = queue_module.Queue(maxsize=queue_size_)
+    signal.signal(signal.SIGINT, handle_shutdown)
+    signal.signal(signal.SIGTERM, handle_shutdown)
 
+    queue_process = queue_module.Queue(maxsize=queue_size_)
     t_comm = threading.Thread(
         target=in_device_communication,
         args=(serial_port, baudrate, queue_process, slave_address,
             hours_to_log, sampling_interval_ms,),
         daemon=True,
     )
-
     t_logger = threading.Thread(
-        target=init_csv_logger,
-        args=("DataLog.csv", queue_process,),
+        target=dual_logger,
+        args=("DataLog.csv", "DataLog.bin", queue_process,),
         daemon=True,
     )
 

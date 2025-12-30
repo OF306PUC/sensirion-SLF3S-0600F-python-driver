@@ -21,7 +21,7 @@ def u16_to_i16(x):
     """
     return x - 0x10000 if x & 0x8000 else x
 
-def interpret_flow_temp_raw(raw_data):
+def interpret_flow_temp_raw(flow_raw, temp_raw):
     """
     interpret raw data bytes from SHDLC device and return flow and temperature values.
 
@@ -31,17 +31,12 @@ def interpret_flow_temp_raw(raw_data):
     :param raw_data: raw data bytes from SHDLC device
     :return: flow in uL/min (or) mL/hr. and temperature in degC.
     """ 
-    raw_flow = u16_to_i16(raw_data[0])
-    raw_temp = u16_to_i16(raw_data[1])
+    raw_flow = u16_to_i16(flow_raw)
+    raw_temp = u16_to_i16(temp_raw)
 
     flow_ul_min = float(raw_flow) / _SCALE_FLOW
-    flow_ml_hr = flow_ul_min * _UL_MIN_TO_ML_HR
     temperature_degC = float(raw_temp) / _SCALE_TEMPERATURE
 
-    air_in_line_flag = int(raw_data[2])
-    high_flow_flag = int(raw_data[3])
-    exp_smoothing = int(raw_data[4])
-
-    return flow_ul_min, flow_ml_hr, temperature_degC, air_in_line_flag, high_flow_flag, exp_smoothing
+    return flow_ul_min, temperature_degC
 
 
