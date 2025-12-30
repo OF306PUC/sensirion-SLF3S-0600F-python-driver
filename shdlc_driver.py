@@ -64,15 +64,15 @@ serial_port_ = "/dev/ttyUSB0"
 baudrate_ = 115200
 slave_address_ = 0x00       # Sensor Bridge default address. RS485 address is 0
 queue_size_ = 1000
-
 hours_to_log_ = 12.0        # hours
 sampling_interval_ = 500    # ms
 
-stopping_event = threading.Event()
+stop_logger_event = threading.Event()
+stop_main_thread_event = threading.Event()
 def handle_shutdown(signum, frame): 
     print("Shutdown signal received. Stopping threads...")
-    stopping_event.set()
-
+    stop_logger_event.set()
+    stop_main_thread_event.set()
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -109,7 +109,7 @@ def dual_logger(csv_filename, bin_filename, queue):
         f_csv.write("UTC_Time,Flow_ul_min,FlowTemperature_degC,"\
                 "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
         
-        while not stopping_event.is_set() or not queue.empty(): 
+        while not stop_logger_event.is_set() or not queue.empty(): 
             try: 
                 item = queue.get(timeout=1)
             except queue_module.Empty:
@@ -187,9 +187,9 @@ def in_device_communication(port, baudrate, queue, slave_address,
         time.sleep(1)
 
         try: 
-            while not stopping_event.is_set(): 
+            while not stop_logger_event.is_set(): 
                 if measurement_count > num_measurements:
-                    stopping_event.set()
+                    stop_logger_event.set()
                 
                 t0 = time.time()
                 # reading data from sensor: 
@@ -249,6 +249,9 @@ def main():
 
     t_comm.start()
     t_logger.start()
+
+    while not stop_main_thread_event.is_set(): 
+        time.sleep(1)
 
 
 if __name__ == "__main__":
