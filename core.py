@@ -12,6 +12,7 @@ SCALE_TEMPERATURE = 200.0
 
 UL_MIN_TO_ML_HR = (60.0 / 1000.0)
 UL_MIN_TO_ML_SEC = (1.0 / 1000.0 / 60.0)
+MIN_TO_SEC = (1.0 / 60.0)
 
 def u16_to_i16(x): 
     """
