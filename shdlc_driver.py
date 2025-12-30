@@ -118,7 +118,7 @@ def dual_logger(csv_filename, bin_filename, queue):
                 flag_air, flag_high_flow, exp_smoothing = item
             
             flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
-            f_csv.write(f"{timestamp},{flow_uL_min:.8f},{temp_c:.8f}"
+            f_csv.write(f"{timestamp},{flow_uL_min:.2f},{temp_c:.2f}"
                     f",{flag_air},{flag_high_flow},{exp_smoothing}\n")
             f_csv.flush()
 
