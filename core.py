@@ -7,10 +7,11 @@ Provides core functionality for SHDLC data interpretation.
 - Temperature: 16-bit signed integer number. (two's complement range: -32768 to 32767).
 """
 
-_SCALE_FLOW = 10.0
-_SCALE_TEMPERATURE = 200.0
+SCALE_FLOW = 10.0
+SCALE_TEMPERATURE = 200.0
 
-_UL_MIN_TO_ML_HR = (60.0 / 1000.0)
+UL_MIN_TO_ML_HR = (60.0 / 1000.0)
+UL_MIN_TO_ML_SEC = (1.0 / 1000.0 / 60.0)
 
 def u16_to_i16(x): 
     """
@@ -34,9 +35,11 @@ def interpret_flow_temp_raw(flow_raw, temp_raw):
     raw_flow = u16_to_i16(flow_raw)
     raw_temp = u16_to_i16(temp_raw)
 
-    flow_ul_min = float(raw_flow) / _SCALE_FLOW
-    temperature_degC = float(raw_temp) / _SCALE_TEMPERATURE
+    flow_ul_min = float(raw_flow) / SCALE_FLOW
+    temperature_degC = float(raw_temp) / SCALE_TEMPERATURE
 
     return flow_ul_min, temperature_degC
+
+
 
 

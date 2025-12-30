@@ -96,17 +96,21 @@ def parse_args():
     return parser.parse_args()
 
 
-def dual_logger(csv_filename, bin_filename, queue): 
+def dual_logger(csv_filename, bin_filename, queue, sampling_interval=sampling_interval_): 
     """
     Threaded CSV-binary logger for SHDLC sensor data.
+    - Reads data from a queue and writes to CSV and binary files.
+    - Integrates flow to compute volume in mL.
     """
+    integrated_volume = 0.0  # in mL
+
     data_dir = 'Temp/'
     os.makedirs(data_dir, exist_ok=True)
 
     csv_path = os.path.join(data_dir, csv_filename)
     bin_path = os.path.join(data_dir, bin_filename)
     with open(csv_path, 'w') as f_csv, open(bin_path, 'wb') as f_bin: 
-        f_csv.write("UTC_Time,Flow_ul_min,FlowTemperature_degC,"\
+        f_csv.write("UTC_Time,Flow_ul_min,Volume_mL,FlowTemperature_degC,"\
                 "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
         
         while not stop_logger_event.is_set() or not queue.empty(): 
@@ -118,7 +122,10 @@ def dual_logger(csv_filename, bin_filename, queue):
                 flag_air, flag_high_flow, exp_smoothing = item
             
             flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
-            f_csv.write(f"{timestamp},{flow_uL_min:.2f},{temp_c:.2f}"
+            # Integrate volume in mL
+            integrated_volume += (flow_uL_min * core.UL_MIN_TO_ML_SEC) * (sampling_interval / 1000.0)
+
+            f_csv.write(f"{timestamp},{flow_uL_min:.4f},{integrated_volume:.4f},{temp_c:.4f}"
                     f",{flag_air},{flag_high_flow},{exp_smoothing}\n")
             f_csv.flush()
 
@@ -246,7 +253,8 @@ def main():
     )
     t_logger = threading.Thread(
         target=dual_logger,
-        args=("DataLog.csv", "DataLog.bin", queue_process,),
+        args=("DataLog.csv", "DataLog.bin", 
+              queue_process, sampling_interval_ms),
         daemon=True,
     )
 
