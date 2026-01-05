@@ -2,6 +2,10 @@
 Sensirion SHDLC Driver Module
 - Runs a dual threaded architecture to handle SHDLC communication via serial port.
 - Uses Sensirion SCC1-RS485 and SCC1-USB adapters for communication.
+
+Raspberry Pi ssh connection note: 
+run the script with:
+    nohup python3 shdlc_driver.py --hours-to-log (hours) -- sampling-ms (ms) > sensirion.log 2>&1 &
 """
 
 # USB Serial driver note
@@ -92,7 +96,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
     - Integrates flow to compute volume in mL.
     """
     try: 
-        flush_every_samples = (core.FLUSH_EVERY / (sampling_interval / 1000.0) - 1)  
+        flush_every_samples = (core.FLUSH_EVERY / (sampling_interval / 1000.0))  
         counter = 0
         integrated_volume = 0.0     # accumulated volume in uL
 
@@ -127,6 +131,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
                 if counter % flush_every_samples == 0: 
                     f_csv.flush()
                     f_bin.flush()
+                    
     except Exception as e:
         error_logger.log(
             ErrorCodes.LOGGER_FAILURE, 
