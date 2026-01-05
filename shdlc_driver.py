@@ -42,6 +42,8 @@ from i2c_command import ShdlcCmdGetI2cSlaveAddress, \
     ShdlcCmdI2cTransceive
 from interface import ShdlcI2CInterface
 from port import ShdlcSerialPort
+from driver_logger import ErrorCodes, ErrorLogger, \
+    MeasurementRingBuffer
 
 import os 
 import time 
@@ -52,20 +54,6 @@ import struct
 import core
 import queue as queue_module
 
-BIN_RECORD_FMT = ">dhhb"
-# >  big-endian
-# d  float64 timestamp
-# h  int16 flow
-# h  int16 temp
-# b  uint8 flags
-
-# Linux: 
-serial_port_ = "/dev/ttyUSB0"
-baudrate_ = 115200
-slave_address_ = 0x00       # Sensor Bridge default address. RS485 address is 0
-queue_size_ = 1000
-hours_to_log_ = 12.0        # hours
-sampling_interval_ = 500    # ms
 
 stop_logger_event = threading.Event()
 stop_main_thread_event = threading.Event()
@@ -78,66 +66,78 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Sensirion SHDLC data logger"
     )
-    parser.add_argument("--port", type=str, default=serial_port_,
-        help=f"Serial port (default: {serial_port_})"
+    parser.add_argument("--port", type=str, default=core.SERIAL_PORT,
+        help=f"Serial port (default: {core.SERIAL_PORT})"
     )
-    parser.add_argument("--baudrate", type=int, default=baudrate_,
-        help=f"Serial port baudrate (default: {baudrate_})"
+    parser.add_argument("--baudrate", type=int, default=core.BAUDRATE,
+        help=f"Serial port baudrate (default: {core.BAUDRATE})"
     )
-    parser.add_argument("--slave-address", type=int, default=slave_address_,
-        help=f"SHDLC slave address (default: {slave_address_})"
+    parser.add_argument("--slave-address", type=int, default=core.SLAVE_ADDRESS,
+        help=f"SHDLC slave address (default: {core.SLAVE_ADDRESS:#04x})"
     )
-    parser.add_argument("--hours-to-log", type=float, default=hours_to_log_,
-        help="Number of hours to log data (default: 12.0)"
+    parser.add_argument("--hours-to-log", type=float, default=core.HOURS_TO_LOG,
+        help=f"Number of hours to log data (default: {core.HOURS_TO_LOG})"
     )
-    parser.add_argument("--sampling-ms", type=int, default=sampling_interval_,
-        help="Sampling interval in milliseconds (default: 500)"
+    parser.add_argument("--sampling-ms", type=int, default=core.SAMPLING_INTERVAL,
+        help=f"Sampling interval in milliseconds (default: {core.SAMPLING_INTERVAL})"
     )
     return parser.parse_args()
 
 
-def dual_logger(csv_filename, bin_filename, queue, sampling_interval=sampling_interval_): 
+def dual_logger(csv_filename, bin_filename, queue, error_logger,
+                sampling_interval=core.SAMPLING_INTERVAL): 
     """
     Threaded CSV-binary logger for SHDLC sensor data.
     - Reads data from a queue and writes to CSV and binary files.
     - Integrates flow to compute volume in mL.
     """
-    integrated_volume = 0.0  # accumulated volume in uL
+    try: 
+        flush_every_samples = (core.FLUSH_EVERY / (sampling_interval / 1000.0) - 1)  
+        counter = 0
+        integrated_volume = 0.0     # accumulated volume in uL
 
-    data_dir = 'Temp/'
-    os.makedirs(data_dir, exist_ok=True)
+        data_dir = 'Temp/'
+        os.makedirs(data_dir, exist_ok=True)
 
-    csv_path = os.path.join(data_dir, csv_filename)
-    bin_path = os.path.join(data_dir, bin_filename)
-    with open(csv_path, 'w') as f_csv, open(bin_path, 'wb') as f_bin: 
-        f_csv.write("UTC_Time,Flow_ul_min,Volume_uL,FlowTemperature_degC,"\
-                "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
-        
-        while not stop_logger_event.is_set() or not queue.empty(): 
-            try: 
-                item = queue.get(timeout=1)
-            except queue_module.Empty:
-                continue
-            timestamp, flow_raw, temp_raw, \
-                flag_air, flag_high_flow, exp_smoothing = item
+        csv_path = os.path.join(data_dir, csv_filename)
+        bin_path = os.path.join(data_dir, bin_filename)
+        with open(csv_path, 'w') as f_csv, open(bin_path, 'wb') as f_bin: 
+            f_csv.write("UTC_Time,Flow_ul_min,Volume_uL,DeviceTemperature_degC,"\
+                    "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
             
-            flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
-            # Integrate volume in uL
-            integrated_volume += (flow_uL_min * core.MIN_TO_SEC) * (sampling_interval / 1000.0)
+            while not stop_logger_event.is_set() or not queue.empty(): 
+                try: 
+                    item = queue.get(timeout=1.0)
+                except queue_module.Empty:
+                    continue
+                timestamp, flow_raw, temp_raw, flags_raw = item
+                
+                flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
+                flag_air, flag_high_flow, exp_smoothing = core.interpret_flags_raw(flags_raw)
+                # Integrate flow to get volume in uL
+                integrated_volume += (flow_uL_min * core.MIN_TO_SEC) * (sampling_interval / 1000.0)
 
-            f_csv.write(f"{timestamp},{flow_uL_min:.4f},{integrated_volume:.4f},{temp_c:.4f}"
-                    f",{flag_air},{flag_high_flow},{exp_smoothing}\n")
-            f_csv.flush()
+                # Write CSV record:
+                f_csv.write(f"{timestamp},{flow_uL_min:.4f},{integrated_volume:.4f},{temp_c:.4f}"
+                        f",{flag_air},{flag_high_flow},{exp_smoothing}\n")
+                # Write binary record: 
+                f_bin.write(struct.pack(core.BIN_RECORD_FMT, timestamp, \
+                                        flow_raw, temp_raw, flags_raw))
+                counter += 1
+                if counter % flush_every_samples == 0: 
+                    f_csv.flush()
+                    f_bin.flush()
+    except Exception as e:
+        error_logger.log(
+            ErrorCodes.LOGGER_FAILURE, 
+            f"Logger encountered an exception: {e}",
+        )
+        stop_logger_event.set()
 
-            # Write binary record: 
-            # flags = bit0: air_in_line, bit1: high_flow, bit2: exp_smoothing b"XXXX_XXXX"
-            flags = (flag_air << 0) | (flag_high_flow << 1) | (exp_smoothing << 2)
-            f_bin.write(struct.pack(BIN_RECORD_FMT, timestamp, flow_raw, temp_raw, flags))
-            f_bin.flush()
 
-
-def in_device_communication(port, baudrate, queue, slave_address, 
-                            hours_to_log=hours_to_log_, sampling_interval=sampling_interval_): 
+def in_device_communication(
+        port, baudrate, queue, slave_address, error_logger, ring_buffer,
+        hours_to_log=core.HOURS_TO_LOG, sampling_interval=core.SAMPLING_INTERVAL): 
     """
     Threaded SHDLC device communication via serial port.
     - Reads data from the SHDLC device and puts it into a queue.
@@ -206,12 +206,28 @@ def in_device_communication(port, baudrate, queue, slave_address,
                 # data is: (flow_ul_min, temp_c, flag_air, flag_high_flow, exp_smoothing)
                 data, error  = interface.i2c_execute(slave_address, transceive_cmd)    
                 if error: 
+                    error_logger.log(
+                        ErrorCodes.SHDLC_ERROR_STATE,
+                        "Error state received during measurement read.",
+                        context=ring_buffer.snapshot()
+                    )
                     print("Error state received during measurement read.")
                     continue
-                flow_raw, temp_raw, air_flag, high_flow_flag, exp_smoothing = data
+
+                flow_raw, temp_raw, flags_raw = data
                 timestamp = time.time()
-                queue.put((float(timestamp), int(flow_raw), int(temp_raw), \
-                        int(air_flag), int(high_flow_flag), int(exp_smoothing)))
+                item = (float(timestamp), int(flow_raw), int(temp_raw), int(flags_raw))
+                ring_buffer.push(item)
+
+                try: 
+                    queue.put(item, timeout=1.0)
+                except queue_module.Full:
+                    error_logger.log(
+                        ErrorCodes.QUEUE_FULL,
+                        "Data queue is full. Dropping measurement.", 
+                        context=ring_buffer.snapshot()
+                    )
+                    print("Warning: Data queue is full. Dropping measurement.")
 
                 t1 = time.time()
                 elapsed_ms = (t1 - t0) * 1000
@@ -244,16 +260,20 @@ def main():
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)
 
-    queue_process = queue_module.Queue(maxsize=queue_size_)
+    queue_process = queue_module.Queue(maxsize=core.QUEUE_MAXSIZE)
+    error_logger = ErrorLogger(path=core.LOGGER_PATH)
+    ring_buffer = MeasurementRingBuffer(max_size=core.BUFF_QUEUE_MAXSIZE)
+
     t_comm = threading.Thread(
         target=in_device_communication,
-        args=(serial_port, baudrate, queue_process, slave_address,
-            hours_to_log, sampling_interval_ms,),
+        args=(
+            serial_port, baudrate, queue_process, slave_address,
+            error_logger, ring_buffer, hours_to_log, sampling_interval_ms,),
         daemon=True,
     )
     t_logger = threading.Thread(
         target=dual_logger,
-        args=("DataLog.csv", "DataLog.bin", 
+        args=("DataLog.csv", "DataLog.bin", error_logger,
               queue_process, sampling_interval_ms),
         daemon=True,
     )

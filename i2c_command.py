@@ -142,6 +142,6 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
         high_flow_flag  = int((flags & 0x0002) != 0)   # Bit 1: High flow flag
         exp_smoothing = int((flags & 0x0006) != 0)     # Bit 5: Exponential smoothing active flag (not used here)
 
-        return flow_raw, temp_raw, air_in_line_flag, high_flow_flag, exp_smoothing
+        return flow_raw, temp_raw, flags_raw, air_in_line_flag, high_flow_flag, exp_smoothing
 
     

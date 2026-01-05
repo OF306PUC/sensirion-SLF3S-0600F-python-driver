@@ -7,12 +7,34 @@ Provides core functionality for SHDLC data interpretation.
 - Temperature: 16-bit signed integer number. (two's complement range: -32768 to 32767).
 """
 
+# Default params (Linux-based system):
+SERIAL_PORT = "/dev/ttyUSB0"
+BAUDRATE = 115200
+SLAVE_ADDRESS = 0x00          # Default I2C slave address for the SL
+QUEUE_MAXSIZE = 1000          # Max size of the data queue
+HOURS_TO_LOG = 48             # Default logging duration in hours (Accoding to Baxter infusion pump lasting time)
+SAMPLING_INTERVAL = 500       # Sampling interval in seconds (10 Hz)
+
+LOGGER_PATH = "error_log.txt"
+BUFF_QUEUE_MAXSIZE = 100      # Max size of the ring buffer for measurements
+
+# Default scaling factors:
 SCALE_FLOW = 10.0
 SCALE_TEMPERATURE = 200.0
 
 UL_MIN_TO_ML_HR = (60.0 / 1000.0)
 UL_MIN_TO_ML_SEC = (1.0 / 1000.0 / 60.0)
 MIN_TO_SEC = (1.0 / 60.0)
+
+# >  big-endian
+# d  float64 timestamp
+# h  int16 flow
+# h  int16 temp
+# b  uint8 flags
+BIN_RECORD_FMT = ">dhhb"
+# Flushing period for logger
+FLUSH_EVERY = 5 # seconds
+
 
 def u16_to_i16(x): 
     """
@@ -40,6 +62,19 @@ def interpret_flow_temp_raw(flow_raw, temp_raw):
     temperature_degC = float(raw_temp) / SCALE_TEMPERATURE
 
     return flow_ul_min, temperature_degC
+
+def interpret_flags_raw(flags_raw):
+    """
+    Interpret signaling flags raw data from SHDLC device.
+
+    :param flags_raw: raw flags data bytes from SHDLC device
+    :return: air_in_line_flag (bool), high_flow_flag (bool), exp_smoothing (bool)
+    """
+    air_in_line_flag = int((flags_raw & 0x0001) != 0)  # Bit 0: Air in line flag
+    high_flow_flag  = int((flags_raw & 0x0002) != 0)   # Bit 1: High flow flag
+    exp_smoothing = int((flags_raw & 0x0006) != 0)     # Bit 5: Exponential smoothing active flag
+
+    return air_in_line_flag, high_flow_flag, exp_smoothing
 
 
 
