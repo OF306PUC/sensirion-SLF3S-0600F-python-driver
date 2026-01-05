@@ -16,7 +16,7 @@ class MeasurementRingBuffer:
         self._buffer = deque(maxlen=max_size)
         self._lock = Lock()
 
-    def append(self, measurement):
+    def push(self, measurement):
         with self._lock:
             self._buffer.append(measurement)
             
