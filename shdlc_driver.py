@@ -273,8 +273,8 @@ def main():
     )
     t_logger = threading.Thread(
         target=dual_logger,
-        args=("DataLog.csv", "DataLog.bin", error_logger,
-              queue_process, sampling_interval_ms),
+        args=("DataLog.csv", "DataLog.bin", queue_process,
+              error_logger, sampling_interval_ms),
         daemon=True,
     )
 

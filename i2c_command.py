@@ -135,13 +135,10 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
             raise ValueError("CRC8 checksum error for signaling flags data.")
         
         # value = (MSB << 8) | LSB: big-endian format
-        flow_raw = (data[0] << 8) | data[1]
-        temp_raw = (data[3] << 8) | data[4]
-        flags    = (data[6] << 8) | data[7]
-        air_in_line_flag = int((flags & 0x0001) != 0)  # Bit 0: Air in line flag
-        high_flow_flag  = int((flags & 0x0002) != 0)   # Bit 1: High flow flag
-        exp_smoothing = int((flags & 0x0006) != 0)     # Bit 5: Exponential smoothing active flag (not used here)
+        flow_raw  = (data[0] << 8) | data[1]
+        temp_raw  = (data[3] << 8) | data[4]
+        flags_raw = (data[6] << 8) | data[7]
 
-        return flow_raw, temp_raw, flags_raw, air_in_line_flag, high_flow_flag, exp_smoothing
+        return flow_raw, temp_raw, flags_raw
 
     
