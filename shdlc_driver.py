@@ -69,7 +69,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
         bin_path = os.path.join(core.DATA_DIR, bin_filename)
         with open(csv_path, 'w') as f_csv, open(bin_path, 'wb') as f_bin: 
             f_csv.write("UTC_Time,Flow_ul_min,Volume_uL,DeviceTemperature_degC,"\
-                    "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
+                    "Flag_Air,Flag_High_Flow,Exp_Smoothing,Flags_Value\n")
             
             while not stop_logger_event.is_set() or not queue.empty(): 
                 try: 
@@ -79,13 +79,12 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
                 timestamp, flow_raw, temp_raw, flags_raw = item
                 
                 flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
-                flag_air, flag_high_flow, exp_smoothing = core.interpret_flags_raw(flags_raw)
-                # Integrate flow to get volume in uL
+                flag_air, flag_high_flow, exp_smoothing, flags_value = core.interpret_flags_raw(flags_raw)
                 integrated_volume += (flow_uL_min * core.MIN_TO_SEC) * (sampling_interval / 1000.0)
 
                 # Write CSV record:
                 f_csv.write(f"{timestamp},{flow_uL_min:.4f},{integrated_volume:.4f},{temp_c:.4f}"
-                        f",{flag_air},{flag_high_flow},{exp_smoothing}\n")
+                        f",{flag_air},{flag_high_flow},{exp_smoothing},{flags_value}\n")
                 # Write binary record: 
                 f_bin.write(struct.pack(core.BIN_RECORD_FMT, timestamp, \
                                         flow_raw, temp_raw, flags_raw))
@@ -161,7 +160,8 @@ def in_device_communication(
 
         seconds_to_log = 3600 * hours_to_log
         num_measurements = int(seconds_to_log * 1000 // sampling_interval)
-        print(f"Logging for {hours_to_log} hours, total measurements: {num_measurements}")
+        print(f"Logging for {hours_to_log} hours, sampling interval: {sampling_interval} ms,"\
+              f" total measurements: {num_measurements}")
         measurement_count = 0
         time.sleep(1)
 
@@ -210,9 +210,10 @@ def in_device_communication(
             data, error  = interface.i2c_execute(slave_address, transceive_stop_cmd)
             print("--- Stopping continuous measurement (shutdown) ---")
             print("Data received from stop command:", data)
-            print("Error state from stop command:", error)
+            if error != ErrorCodes.SHDLC_ADDR_OUT_OF_RANGE:
+                print("Error state from stop command:", error)
+            stop_main_thread_event.set()        
             
-
 
 def main():
     args = parse_args()
@@ -222,9 +223,6 @@ def main():
     slave_address = args.slave_address
     hours_to_log = args.hours_to_log
     sampling_interval_ms = args.sampling_ms
-
-    print(f"Logging for {hours_to_log} hours")
-    print(f"Sampling interval: {sampling_interval_ms} ms")
 
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)

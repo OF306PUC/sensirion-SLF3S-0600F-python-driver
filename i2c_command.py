@@ -66,15 +66,15 @@ class ShdlcCmdI2cTransceiveBase(ShdlcCommand):
 class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
     """
     SHDLC command for I2C transceive operations.
-    - Write data to an I2C device.
-    - Read data from an I2C device. (9 bytes max for SLF3S-0600F sensor)
+    - Write data to an I2C device in big-endian order.
+    - Read data from an I2C device in big-endian order. (9 bytes max for SLF3S-0600F sensor)
     """
     
     _I2C_TIMEOUT_MS = [0x00, 0x64]  # 100 ms timeout
     _I2C_ADDRESS = 0x08             # Default I2C address
     _MEDIUM_WATER = [0x36, 0x08]    # Medium: H20 calibration
     _MEDIUM_IPA = [0x36, 0x15]      # Medium: Isopropyl Alcohol calibration 
-    _STOP_CODE = [0x3F, 0xFF]       # I2C Stop code
+    _STOP_CODE = [0x3F, 0xF9]       # I2C Stop code
 
     _RELIABLE_FLOW_MEAS_DELAY_MS = 60  # ms
 

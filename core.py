@@ -71,11 +71,12 @@ def interpret_flags_raw(flags_raw):
     :param flags_raw: raw flags data bytes from SHDLC device
     :return: air_in_line_flag (bool), high_flow_flag (bool), exp_smoothing (bool)
     """
-    air_in_line_flag = int((flags_raw & 0x0001) != 0)  # Bit 0: Air in line flag
-    high_flow_flag  = int((flags_raw & 0x0002) != 0)   # Bit 1: High flow flag
-    exp_smoothing = int((flags_raw & 0x0006) != 0)     # Bit 5: Exponential smoothing active flag
+    air_in_line_flag = int((flags_raw & 0x0001))  # Bit 0: Air in line flag
+    high_flow_flag  = int((flags_raw & 0x0002))   # Bit 1: High flow flag
+    exp_smoothing = int((flags_raw & 0x0006))     # Bit 5: Exponential smoothing active flag
+    flags_value = int(flags_raw)
 
-    return air_in_line_flag, high_flow_flag, exp_smoothing
+    return air_in_line_flag, high_flow_flag, exp_smoothing, flags_value
 
 
 
