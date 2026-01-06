@@ -15,7 +15,8 @@ QUEUE_MAXSIZE = 1000          # Max size of the data queue
 HOURS_TO_LOG = 48             # Default logging duration in hours (Accoding to Baxter infusion pump lasting time)
 SAMPLING_INTERVAL = 500       # Sampling interval in seconds (10 Hz)
 
-LOGGER_PATH = "error_log.txt"
+DATA_DIR = "Temp/"
+LOGGER_PATH = "Logs/error_log.txt"
 BUFF_QUEUE_MAXSIZE = 100      # Max size of the ring buffer for measurements
 
 # Default scaling factors:

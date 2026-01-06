@@ -1,5 +1,6 @@
 from collections import deque
 from threading import Lock
+import os
 import time  
 
 
@@ -7,6 +8,11 @@ class ErrorCodes:
     SHDLC_ERROR_STATE = None 
     QUEUE_FULL = 1
     LOGGER_FAILURE = 2
+
+    # SHDLC error codes: -----------------------------
+    # Address of non-volatile memory out of range 0x21
+    SHDLC_ADDR_OUT_OF_RANGE = 33
+
 
 class MeasurementRingBuffer:
     """
@@ -29,6 +35,7 @@ class ErrorLogger:
     def __init__(self, path):
         self.path = path
         self._lock = Lock()
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
 
     def log(self, code, message, context=None):
         ts = time.time()

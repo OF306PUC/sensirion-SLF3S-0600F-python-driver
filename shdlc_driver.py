@@ -1,46 +1,10 @@
+#!/usr/bin/env python3
+
 """
 Sensirion SHDLC Driver Module
 - Runs a dual threaded architecture to handle SHDLC communication via serial port.
 - Uses Sensirion SCC1-RS485 and SCC1-USB adapters for communication.
-
-Raspberry Pi ssh connection note: 
-run the script with:
-    nohup python3 shdlc_driver.py --hours-to-log (hours) -- sampling-ms (ms) > sensirion.log 2>&1 &
 """
-
-# USB Serial driver note
-# ---------------------
-# Sensirion SCC1-USB / RS485 adapters use an FTDI USB-to-serial interface.
-# On modern Raspberry Pi OS / Linux systems, the required driver (ftdi_sio)
-# is loaded automatically and no manual setup is needed.
-#
-# If the device does not appear as /dev/ttyUSB*, check:
-#   lsmod | grep ftdi
-#   dmesg | grep ttyUSB
-#
-# Manual driver binding via modprobe/new_id is only required on older
-# kernels or custom Linux images.
-
-
-# Time synchronization requirement
-# -------------------------------
-# Ensure the system clock is synchronized (required for valid timestamps).
-# On Raspberry Pi / Linux (systemd-based), enable NTP with:
-#
-#   sudo timedatectl set-ntp true
-#
-# Verify synchronization with:
-#
-#   timedatectl
-#   timedatectl show -p NTPSynchronized
-#
-# A working network connection is required for initial synchronization.
-# Note:
-# Older systems may use the legacy 'ntp' daemon:
-#   sudo apt-get install ntp
-#   sudo service ntp start
-# Do NOT use this together with systemd-timesyncd.
-
 
 from i2c_command import ShdlcCmdGetI2cSlaveAddress, \
     ShdlcCmdI2cTransceive
@@ -100,11 +64,9 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
         counter = 0
         integrated_volume = 0.0     # accumulated volume in uL
 
-        data_dir = 'Temp/'
-        os.makedirs(data_dir, exist_ok=True)
-
-        csv_path = os.path.join(data_dir, csv_filename)
-        bin_path = os.path.join(data_dir, bin_filename)
+        os.makedirs(core.DATA_DIR, exist_ok=True)
+        csv_path = os.path.join(core.DATA_DIR, csv_filename)
+        bin_path = os.path.join(core.DATA_DIR, bin_filename)
         with open(csv_path, 'w') as f_csv, open(bin_path, 'wb') as f_bin: 
             f_csv.write("UTC_Time,Flow_ul_min,Volume_uL,DeviceTemperature_degC,"\
                     "Flag_Air,Flag_High_Flow,Exp_Smoothing\n")
@@ -131,7 +93,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
                 if counter % flush_every_samples == 0: 
                     f_csv.flush()
                     f_bin.flush()
-                    
+
     except Exception as e:
         error_logger.log(
             ErrorCodes.LOGGER_FAILURE, 
@@ -167,7 +129,8 @@ def in_device_communication(
         data, error  = interface.i2c_execute(slave_address, transceive_stop_cmd)
         print("--- Stopping continuous measurement ---")
         print("Data received from stop command:", data)
-        print("Error state from stop command:", error)
+        if error != ErrorCodes.SHDLC_ADDR_OUT_OF_RANGE:
+            print("Error state from stop command:", error)
         print("")
         time.sleep(1)
 
@@ -181,7 +144,8 @@ def in_device_communication(
         data, error  = interface.i2c_execute(slave_address, transceive_start_cmd)
         print("--- Starting continuous measurement ---")
         print("Data received from start command:", data)
-        print("Error state from start command:", error)
+        if error != ErrorCodes.SHDLC_ADDR_OUT_OF_RANGE:
+            print("Error state from start command:", error)
         print("")
         time.sleep(1)
 
