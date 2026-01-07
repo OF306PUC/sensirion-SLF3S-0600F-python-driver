@@ -406,11 +406,14 @@ if __name__ == "__main__":
         print(f"Measurement Interval: {measurement_interval} ms, Error state: {error_state}")
 
         get_last_meas_cmd = ShdlcGetLastMeasurement()
-        last_measurement, error_state = interface.execute(
-            slave_address=0x00,
-            command=get_last_meas_cmd
-        )
-        print(f"Last Measurement Data: {last_measurement}, Error state: {error_state}")
+
+        for i in range(10): 
+            time.sleep(0.5)  # Wait for measurement to be ready
+            last_measurement, error_state = interface.execute(
+                slave_address=0x00,
+                command=get_last_meas_cmd
+            )
+            print(f"Last Measurement Data: {last_measurement}, Error state: {error_state}")
 
 
 
