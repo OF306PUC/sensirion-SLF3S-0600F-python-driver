@@ -6,7 +6,7 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class ShdlcI2CInterface(object): 
+class ShdlcInterface(object): 
     """
     This class represents the connection to an SHDLC RS485 Sensor Cable bus. 
 
@@ -28,7 +28,7 @@ class ShdlcI2CInterface(object):
             The port used for communication (must implement the
             :py:class:`~sensirion_shdlc_driver.port.ShdlcPort` interface)
         """
-        super(ShdlcI2CInterface, self).__init__()
+        super(ShdlcInterface, self).__init__()
         self._port = port
         log.debug("Opened ShdlcConnection on '{}'.".format(port))
 

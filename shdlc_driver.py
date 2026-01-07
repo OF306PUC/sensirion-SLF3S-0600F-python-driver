@@ -8,7 +8,7 @@ Sensirion SHDLC Driver Module
 
 from i2c_command import ShdlcCmdGetI2cSlaveAddress, \
     ShdlcCmdI2cTransceive
-from interface import ShdlcI2CInterface
+from interface import ShdlcInterface
 from port import ShdlcSerialPort
 from driver_logger import ErrorCodes, ErrorLogger, \
     MeasurementRingBuffer
@@ -109,7 +109,7 @@ def in_device_communication(
     - Reads data from the SHDLC device and puts it into a queue.
     """
     with ShdlcSerialPort(port=port, baudrate=baudrate) as shdlc_port:
-        interface = ShdlcI2CInterface(port=shdlc_port)
+        interface = ShdlcInterface(port=shdlc_port)
 
         # Get I2C slave address
         get_i2c_addr_cmd = ShdlcCmdGetI2cSlaveAddress()
