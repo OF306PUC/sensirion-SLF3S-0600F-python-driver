@@ -6,34 +6,7 @@ from command import ShdlcCommand
 import logging
 log = logging.getLogger(__name__)
 
-
-class ShdlcCmdGetI2cSlaveAddressBase(ShdlcCommand): 
-    """
-    SHDLC command ID: 0x25 "Get Sensor Address (I2C)".
-    """
-
-    def __init__(self, *args, **kwargs): 
-        super(ShdlcCmdGetI2cSlaveAddressBase, self).__init__(
-            0x25, *args, **kwargs
-        )
-
-
-class ShdlcCmdGetI2cSlaveAddress(ShdlcCmdGetI2cSlaveAddressBase):
-    def __init__(self): 
-        super(ShdlcCmdGetI2cSlaveAddress, self).__init__(
-            data=[], max_response_time=0.1,
-            min_response_length=1, max_response_length=2
-        )
-
-    def interpret_response(self, data): 
-        """
-        :return byte: I2C Slave Address.
-        """
-        data_bytes = bytearray(data)  
-        i2c_addr = int(data_bytes[0])
-        return i2c_addr
     
-
 class ShdlcCmdI2cTransceiveBase(ShdlcCommand): 
     """
     SHDLC command ID: 0x2A "I2C Transceive".
@@ -82,7 +55,7 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
     _WRITE_BIT = 0x00
     _READ_BIT = 0x01
 
-    def __init__(self, i2c_addr, tx_data, rx_length, max_response_time,
+    def __init__(self, i2c_addr, tx_data, rx_length, i2c_timeout, max_response_time,
                  post_processing_time=0.0): 
         """
         Constructor.
@@ -100,8 +73,9 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
         data.append(i2c_addr)
         data.append(len(tx_data))
         data.append(rx_length)
-        data.extend(self._I2C_TIMEOUT_MS)
+        data.extend(i2c_timeout)
         data.extend(tx_data)
+
         super(ShdlcCmdI2cTransceive, self).__init__(
             data=data,
             max_response_time=max_response_time,
@@ -126,6 +100,10 @@ class ShdlcCmdI2cTransceive(ShdlcCmdI2cTransceiveBase):
         if self.rx_length == 0: 
             time.sleep(self._RELIABLE_FLOW_MEAS_DELAY_MS / 1000.0)
             return None  # No data to interpret
+        
+        if self.rx_length and len(data) != self.rx_length: 
+            raise ValueError("I2C transceive: Expected {} bytes, got {} bytes."
+                             .format(self.rx_length, len(data)))
 
         if self.crc8_checksum_calculation(data[0:2]) != data[2]:
             raise ValueError("CRC8 checksum error for flow data.")

@@ -5,9 +5,10 @@ Sensirion SHDLC Driver Module
 - Runs a dual threaded architecture to handle SHDLC communication via serial port.
 - Uses Sensirion SCC1-RS485 and SCC1-USB adapters for communication.
 """
-
-from i2c_command import ShdlcCmdGetI2cSlaveAddress, \
-    ShdlcCmdI2cTransceive
+from shdlc_command import ShdlcStartContinuousMeasurement, \
+    ShdlcGetContinuousMeasurementStatus, ShdlcStopContinuousMeasurement, \
+    ShdlcGetLastMeasurement
+from i2c_command import ShdlcCmdI2cTransceive
 from interface import ShdlcInterface
 from port import ShdlcSerialPort
 from driver_logger import ErrorCodes, ErrorLogger, \
@@ -111,40 +112,36 @@ def in_device_communication(
     with ShdlcSerialPort(port=port, baudrate=baudrate) as shdlc_port:
         interface = ShdlcInterface(port=shdlc_port)
 
-        # Get I2C slave address
-        get_i2c_addr_cmd = ShdlcCmdGetI2cSlaveAddress()
-        i2c_addr, error = interface.execute(slave_address,get_i2c_addr_cmd)
-        print(f"Sensor I2C Address: {i2c_addr:#04x}, Error state: {error}")
-        print("")
-        time.sleep(1)
-
         # Stopping continuous measurement 
-        transceive_stop_cmd = ShdlcCmdI2cTransceive(
-            i2c_addr=ShdlcCmdI2cTransceive._I2C_ADDRESS,
-            tx_data=ShdlcCmdI2cTransceive._STOP_CODE,
-            rx_length=0,
-            max_response_time=0.1
+        i2c_transceive_stop_cmd = ShdlcStopContinuousMeasurement(
+            stop_code=ShdlcStopContinuousMeasurement._I2C_STOP_CODE
         )
-        data, error  = interface.i2c_execute(slave_address, transceive_stop_cmd)
+        _, error  = interface.execute(slave_address, i2c_transceive_stop_cmd)
         print("--- Stopping continuous measurement ---")
-        print("Data received from stop command:", data)
-        if error != ErrorCodes.SHDLC_ADDR_OUT_OF_RANGE:
+        if error: 
             print("Error state from stop command:", error)
         print("")
         time.sleep(1)
 
         # I2C Transceive command to start continuous measurement
-        transceive_start_cmd = ShdlcCmdI2cTransceive(
-            i2c_addr=ShdlcCmdI2cTransceive._I2C_ADDRESS,
-            tx_data=ShdlcCmdI2cTransceive._MEDIUM_WATER,
-            rx_length=0,
-            max_response_time=0.1
+        i2c_transceive_start_cmd = ShdlcStartContinuousMeasurement(
+            measurement_interval=ShdlcStartContinuousMeasurement._MEASUREMENT_INTERVAL_100_MS,
+            i2c_medium_command=ShdlcStartContinuousMeasurement._I2C_MEAS_CMD_MEDIUM_WATER
         )
-        data, error  = interface.i2c_execute(slave_address, transceive_start_cmd)
+        _, error  = interface.execute(slave_address, i2c_transceive_start_cmd)
         print("--- Starting continuous measurement ---")
-        print("Data received from start command:", data)
-        if error != ErrorCodes.SHDLC_ADDR_OUT_OF_RANGE:
+        if error: 
             print("Error state from start command:", error)
+        print("")
+        time.sleep(1)
+
+        # I2C Transceive command to check continuous measurement status
+        i2c_transceive_status_cmd = ShdlcGetContinuousMeasurementStatus()
+        status_data, error  = interface.execute(slave_address, i2c_transceive_status_cmd)
+        print("--- Continuous Measurement Status ---")
+        print("Status data received - measurement interval [ms]:", status_data)
+        if error: 
+            print("Error state from status command:", error)
         print("")
         time.sleep(1)
 
@@ -153,6 +150,7 @@ def in_device_communication(
                 ShdlcCmdI2cTransceive._READ_BIT 
         transceive_cmd = ShdlcCmdI2cTransceive(
             i2c_addr=ShdlcCmdI2cTransceive._I2C_ADDRESS,
+            i2c_timeout=ShdlcCmdI2cTransceive._I2C_TIMEOUT_MS,
             tx_data=[i2c_header],       # Read measurement command
             rx_length=9,                # 9 bytes max for SLF3S-0600F sensor
             max_response_time=0.1
@@ -173,7 +171,7 @@ def in_device_communication(
                 t0 = time.time()
                 # reading data from sensor: 
                 # data is: (flow_ul_min, temp_c, flag_air, flag_high_flow, exp_smoothing)
-                data, error  = interface.i2c_execute(slave_address, transceive_cmd)    
+                data, error = interface.execute(slave_address, transceive_cmd)    
                 if error: 
                     error_logger.log(
                         ErrorCodes.SHDLC_ERROR_STATE,
@@ -207,10 +205,9 @@ def in_device_communication(
 
         finally: 
             # Send stop command before ending
-            data, error  = interface.i2c_execute(slave_address, transceive_stop_cmd)
+            _, error  = interface.execute(slave_address, i2c_transceive_stop_cmd)
             print("--- Stopping continuous measurement (shutdown) ---")
-            print("Data received from stop command:", data)
-            if error != ErrorCodes.SHDLC_ADDR_OUT_OF_RANGE:
+            if error: 
                 print("Error state from stop command:", error)
             stop_main_thread_event.set()        
             

@@ -1,4 +1,3 @@
-import time 
 from command import ShdlcCommand
 
 import logging
@@ -7,7 +6,7 @@ log = logging.getLogger(__name__)
 
 class ShdlcGetVersionBase(ShdlcCommand): 
     """
-    SHDLC command ID: 0x01 "Get Version".
+    SHDLC command ID: 0xD1 "Get Version".
     """
 
     def __init__(self, *args, **kwargs): 
@@ -279,7 +278,11 @@ class ShdlcStopContinuousMeasurementBase(ShdlcCommand):
 
 class ShdlcStopContinuousMeasurement(ShdlcStopContinuousMeasurementBase):
     """
-    Docstring for ShdlcStopContinuousMeasurement
+    SHDLC command to stop continuous measurement mode on the sensor.
+    Stop command is provided via flow sensor I2C stop code found in the datasheet.
+
+    [IMPORTANT] Make sure to stop the continuous measurement mode, otherwise you will 
+                will not have access to other commands (EEPROM) until the device is reset.
     """
 
     _I2C_STOP_CODE = [0x3F, 0xF9]       # I2C Stop code
@@ -316,12 +319,32 @@ class ShdlcGetLastMeasurementBase(ShdlcCommand):
             0x35, *args, **kwargs
         )
 
+    def crc8_checksum_calculation(self, data): 
+        """
+        TODO: (finish understanding) Calculate CRC8 checksum for I2C data.
+
+        :param bytes-like data: Data to calculate the checksum for.
+        :return byte: Calculated CRC8 checksum.
+        """
+        crc = 0xFF
+        for byte in data:
+            crc ^= byte
+            for _ in range(8):
+                if (crc & 0x80) != 0:
+                    crc = (crc << 1) ^ 0x31
+                else:
+                    crc <<= 1
+                crc &= 0xFF  # Ensure CRC remains 8-bit
+        return crc
+
+
 class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
     """
-    Docstring for ShdlcGetLastMeasurement
+    SHDLC command to get the last measurement data from the sensor.
+    The requested signals must be specified.
     """
 
-    _SIGNALS = [0x00, 0x02]  # 0000_0010
+    _SIGNALS = [0x00, 0x03]            # Request all 3 signals
 
     def __init__(self, signals): 
         data = bytearray()
@@ -335,96 +358,17 @@ class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
         """
         :return int: Last measurement value as signed 32-bit integer.
         """
-        data_bytes = bytearray(data)  
-        return data_bytes
-    
-
-
-if __name__ == "__main__":
-    
-    from interface import ShdlcInterface
-    from port import ShdlcSerialPort
-
-    port = "/dev/ttyUSB0"  # Example port
-    baudrate = 115200
-    with ShdlcSerialPort(port=port, baudrate=baudrate) as shdlc_port:
-        interface = ShdlcInterface(port=shdlc_port)
+        if self.crc8_checksum_calculation(data[0:2]) != data[2]:
+            raise ValueError("CRC8 checksum error for flow data.")
+        if self.crc8_checksum_calculation(data[3:5]) != data[5]:
+            raise ValueError("CRC8 checksum error for temperature data.")
+        if self.crc8_checksum_calculation(data[6:8]) != data[8]:
+            raise ValueError("CRC8 checksum error for signaling flags data.")
         
-        i2c_stop_cmd = ShdlcStopContinuousMeasurement(
-            stop_code=ShdlcStopContinuousMeasurement._I2C_STOP_CODE
-        )
-        _, error_state = interface.execute(
-            slave_address=0x00,
-            command=i2c_stop_cmd
-        )
-        print(f"Stopped Continuous Measurement, Error state: {error_state}")
+        # value = (MSB << 8) | LSB: big-endian format
+        flow_raw  = (data[0] << 8) | data[1]
+        temp_raw  = (data[3] << 8) | data[4]
+        flags_raw = (data[6] << 8) | data[7]
 
-        get_version_cmd = ShdlcGetVersion()
-        version_info, error_state = interface.execute(
-            slave_address=0x00,
-            command=get_version_cmd
-        )
-
-        print(f"Version Info: {version_info}, Error state: {error_state}")
-
-        selftest_cmd = ShdlcDeviceSelfTest()
-        selftest_result, error_state = interface.execute(
-            slave_address=0x00,
-            command=selftest_cmd
-        )
-
-        print(f"Self Test Result: {selftest_result}, Error state: {error_state}")
-
-        get_sensor_voltage_cmd = ShdlcGetVoltage()
-        sensor_voltage, error_state = interface.execute(
-            slave_address=0x00,
-            command=get_sensor_voltage_cmd
-        )
-
-        print(f"Sensor Voltage: {sensor_voltage} V, Error state: {error_state}")
-
-        get_sensor_type_cmd = ShdlcGetSensorType()
-        sensor_type, error_state = interface.execute(
-            slave_address=0x00,
-            command=get_sensor_type_cmd
-        )
-        print(f"Sensor Type: {sensor_type}, Error state: {error_state}")
-
-        i2c_slave_address_cmd = ShdlcCmdGetI2cSlaveAddress()
-        i2c_address, error_state = interface.execute(
-            slave_address=0x00,
-            command=i2c_slave_address_cmd
-        )
-        print(f"I2C Slave Address: {i2c_address:#04x}, Error state: {error_state}")
-
-        start_meas_cmd = ShdlcStartContinuousMeasurement(
-            measurement_interval=ShdlcStartContinuousMeasurement._MEASUREMENT_INTERVAL_100_MS,
-            i2c_medium_command=ShdlcStartContinuousMeasurement._I2C_MEAS_CMD_MEDIUM_WATER
-        )
-        _, error_state = interface.execute(
-            slave_address=0x00,
-            command=start_meas_cmd
-        )
-        print(f"Started Continuous Measurement, Error state: {error_state}")
-
-        status_cmd = ShdlcGetContinuousMeasurementStatus()
-        measurement_interval, error_state = interface.execute(
-            slave_address=0x00,
-            command=status_cmd
-        )
-        print(f"Measurement Interval: {measurement_interval} ms, Error state: {error_state}")
-
-        get_last_meas_cmd = ShdlcGetLastMeasurement(signals=ShdlcGetLastMeasurement._SIGNALS)
-        for i in range(10): 
-            time.sleep(0.5)  # Wait for measurement to be ready
-            last_measurement, error_state = interface.execute(
-                slave_address=0x00,
-                command=get_last_meas_cmd
-            )
-            print(f"Last Measurement Data: {last_measurement}, Error state: {error_state}")
-
-
-
-
-
+        return flow_raw, temp_raw, flags_raw
         
