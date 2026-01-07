@@ -106,7 +106,7 @@ class ShdlcGetVoltage(ShdlcGetVoltageBase):
     def __init__(self): 
         super(ShdlcGetVoltage, self).__init__(
             data=[], max_response_time=0.1,
-            min_response_length=2, max_response_length=2
+            min_response_length=1, max_response_length=2
         )
 
     def interpret_response(self, data): 
