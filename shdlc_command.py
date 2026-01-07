@@ -117,7 +117,11 @@ class ShdlcGetVoltage(ShdlcGetVoltageBase):
         :return int: Sensor voltage in millivolts.
         """
         data_bytes = bytearray(data)  
-        data_bytes = (data_bytes[0] << 8) | data_bytes[1]
+        if len(data_bytes) != 2:
+            data_bytes = data_bytes[0]
+        else:
+            data_bytes = (data_bytes[0] << 8) | data_bytes[1]
+            
         if int(data_bytes) == 0: 
             return 3.5
         else: 
