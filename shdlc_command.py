@@ -240,6 +240,33 @@ class ShdlcStartContinuousMeasurement(ShdlcStartContinuousMeasurementBase):
         return None
     
 
+class ShdlcGetContinuousMeasurementStatusBase(ShdlcCommand):
+    """
+    SHDLC command ID: 0x33 "Get Continuous Measurement Status".
+    """
+
+    def __init__(self, *args, **kwargs): 
+        super(ShdlcGetContinuousMeasurementStatusBase, self).__init__(
+            0x33, *args, **kwargs
+        )
+
+class ShdlcGetContinuousMeasurementStatus(ShdlcGetContinuousMeasurementStatusBase):
+    def __init__(self): 
+        super(ShdlcGetContinuousMeasurementStatus, self).__init__(
+            data=[], max_response_time=0.1,
+            min_response_length=1, max_response_length=2
+        )
+
+    def interpret_response(self, data): 
+        """
+        :return int: Measurement interval in ms.
+        """
+        data_bytes = bytearray(data)  
+        data_bytes = (data_bytes[0] << 8) | data_bytes[1]
+        measurment_interval = int(data_bytes)
+        return measurment_interval
+    
+
 class ShdlcStopContinuousMeasurementBase(ShdlcCommand): 
     """
     SHDLC command ID: 0x34 "Stop Continuous Measurement".
@@ -277,6 +304,31 @@ class ShdlcStopContinuousMeasurement(ShdlcStopContinuousMeasurementBase):
         if len(data) != 0:
             log.warning("Unexpected data received for StopContinuousMeasurement: %s", data)
         return None
+    
+
+class ShdlcGetLastMeasurementBase(ShdlcCommand):
+    """
+    SHDLC command ID: 0x35 "Get Last Measurement".
+    """
+
+    def __init__(self, *args, **kwargs): 
+        super(ShdlcGetLastMeasurementBase, self).__init__(
+            0x35, *args, **kwargs
+        )
+
+class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
+    def __init__(self): 
+        super(ShdlcGetLastMeasurement, self).__init__(
+            data=[], max_response_time=0.1,
+            min_response_length=2, max_response_length=6
+        )
+
+    def interpret_response(self, data): 
+        """
+        :return int: Last measurement value as signed 32-bit integer.
+        """
+        data_bytes = bytearray(data)  
+        return data_bytes
     
 
 if __name__ == "__main__":
@@ -345,6 +397,22 @@ if __name__ == "__main__":
             command=start_meas_cmd
         )
         print(f"Started Continuous Measurement, Error state: {error_state}")
+
+        status_cmd = ShdlcGetContinuousMeasurementStatus()
+        measurement_interval, error_state = interface.execute(
+            slave_address=0x00,
+            command=status_cmd
+        )
+        print(f"Measurement Interval: {measurement_interval} ms, Error state: {error_state}")
+
+        get_last_meas_cmd = ShdlcGetLastMeasurement()
+        last_measurement, error_state = interface.execute(
+            slave_address=0x00,
+            command=get_last_meas_cmd
+        )
+        print(f"Last Measurement Data: {last_measurement}, Error state: {error_state}")
+
+
 
 
 
