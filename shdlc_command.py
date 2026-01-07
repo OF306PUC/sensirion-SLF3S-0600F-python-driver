@@ -4,6 +4,35 @@ from command import ShdlcCommand
 import logging
 log = logging.getLogger(__name__)
 
+class ShdlcDeviceSelfTestBase(ShdlcCommand):
+    """
+    SHDLC command ID: 0x22 "Device Self Test".
+    """
+
+    def __init__(self, *args, **kwargs): 
+        super(ShdlcDeviceSelfTestBase, self).__init__(
+            0x22, *args, **kwargs
+        )
+
+class ShdlcDeviceSelfTest(ShdlcDeviceSelfTestBase):
+    def __init__(self): 
+        super(ShdlcDeviceSelfTest, self).__init__(
+            data=[], max_response_time=1.0,
+            min_response_length=2, max_response_length=2
+        )
+
+    def interpret_response(self, data): 
+        """
+        :return byte: Self test result code. uint16 [bit encoded]
+        0: EEPROM error
+        1: MCU supply voltage too high/low
+        2: Failure on I2C line
+        3: Failure on supply voltage 
+        """
+        data_bytes = bytearray(data)  
+        data_bytes = (data_bytes[0] << 8) | data_bytes[1]
+        return data_bytes
+
 class ShdlcGetVersionBase(ShdlcCommand): 
     """
     SHDLC command ID: 0x01 "Get Version".
@@ -89,9 +118,19 @@ if __name__ == "__main__":
         interface = ShdlcInterface(port=shdlc_port)
 
         get_version_cmd = ShdlcGetVersion()
-        version_info, error_state = interface.transceive(
+        version_info, error_state = interface.execute(
             slave_address=0x00,
             command=get_version_cmd
         )
 
-        print(version_info)
+        print(f"Version Info: {version_info}, Error state: {error_state}")
+
+        selftest_cmd = ShdlcDeviceSelfTest()
+        selftest_result, error_state = interface.execute(
+            slave_address=0x00,
+            command=selftest_cmd
+        )
+
+        print(f"Self Test Result: 0x{selftest_result:04X}, Error state: {error_state}")
+
+        
