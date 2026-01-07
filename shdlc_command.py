@@ -338,7 +338,7 @@ class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
         data_bytes = bytearray(data)  
         return data_bytes
     
-    
+
 
 if __name__ == "__main__":
     
@@ -414,8 +414,7 @@ if __name__ == "__main__":
         )
         print(f"Measurement Interval: {measurement_interval} ms, Error state: {error_state}")
 
-        get_last_meas_cmd = ShdlcGetLastMeasurement()
-
+        get_last_meas_cmd = ShdlcGetLastMeasurement(signals=ShdlcGetLastMeasurement._SIGNALS)
         for i in range(10): 
             time.sleep(0.5)  # Wait for measurement to be ready
             last_measurement, error_state = interface.execute(
