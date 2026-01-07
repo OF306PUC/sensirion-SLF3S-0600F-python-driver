@@ -321,7 +321,7 @@ class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
     Docstring for ShdlcGetLastMeasurement
     """
 
-    _SIGNALS = [0x00, 0x03]  # 0000_0011
+    _SIGNALS = [0x00, 0x02]  # 0000_0010
 
     def __init__(self, signals): 
         data = bytearray()
