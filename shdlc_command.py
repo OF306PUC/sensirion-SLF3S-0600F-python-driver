@@ -317,9 +317,17 @@ class ShdlcGetLastMeasurementBase(ShdlcCommand):
         )
 
 class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
-    def __init__(self): 
+    """
+    Docstring for ShdlcGetLastMeasurement
+    """
+
+    _SIGNALS = [0x00, 0x03]  # 0000_0011
+
+    def __init__(self, signals): 
+        data = bytearray()
+        data.extend(signals)
         super(ShdlcGetLastMeasurement, self).__init__(
-            data=[], max_response_time=0.1,
+            data=data, max_response_time=0.1,
             min_response_length=2, max_response_length=6
         )
 
@@ -329,6 +337,7 @@ class ShdlcGetLastMeasurement(ShdlcGetLastMeasurementBase):
         """
         data_bytes = bytearray(data)  
         return data_bytes
+    
     
 
 if __name__ == "__main__":
