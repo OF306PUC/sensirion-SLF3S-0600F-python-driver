@@ -61,7 +61,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
     - Integrates flow to compute volume in mL.
     """
     try: 
-        flush_every_samples = (core.FLUSH_EVERY / (sampling_interval / 1000.0))  
+        flush_every_samples = core.FLUSH_EVERY 
         counter = 0
         integrated_volume = 0.0     # accumulated volume in uL
 
@@ -82,6 +82,9 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
                 flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
                 flag_air, flag_high_flow, exp_smoothing, flags_value = core.interpret_flags_raw(flags_raw)
                 integrated_volume += (flow_uL_min * core.MIN_TO_SEC) * (sampling_interval / 1000.0)
+
+                flow_raw = core.u16_to_i16(flow_raw)
+                temp_raw = core.u16_to_i16(temp_raw)
 
                 # Write CSV record:
                 f_csv.write(f"{timestamp},{flow_uL_min:.4f},{integrated_volume:.4f},{temp_c:.4f}"

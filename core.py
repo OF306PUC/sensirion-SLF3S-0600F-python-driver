@@ -31,10 +31,10 @@ MIN_TO_SEC = (1.0 / 60.0)
 # d  float64 timestamp
 # h  int16 flow
 # h  int16 temp
-# b  uint8 flags
-BIN_RECORD_FMT = ">dhhb"
+# H  uint16 flags
+BIN_RECORD_FMT = ">dhhH"
 # Flushing period for logger
-FLUSH_EVERY = 5 # seconds
+FLUSH_EVERY = 10 # samples
 
 
 def u16_to_i16(x): 
