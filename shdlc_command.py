@@ -200,10 +200,13 @@ class ShdlcStartContinuousMeasurementBase(ShdlcCommand):
             0x33, *args, **kwargs
         )
 
-
 class ShdlcStartContinuousMeasurement(ShdlcStartContinuousMeasurementBase):
     """
     SHDLC command to start continuous measurement mode on the sensor.
+    The measurement interval and medium type must be specified.
+
+    [IMPORTANT] Make sure to stop the continuous measurement mode, otherwise you will 
+                will not have access to other commands (EEPROM) until the device is reset.
     """
 
     _MEASUREMENT_INTERVAL_100_MS = [0x00, 0x64]  # 100 ms 
@@ -237,6 +240,45 @@ class ShdlcStartContinuousMeasurement(ShdlcStartContinuousMeasurementBase):
         return None
     
 
+class ShdlcStopContinuousMeasurementBase(ShdlcCommand): 
+    """
+    SHDLC command ID: 0x34 "Stop Continuous Measurement".
+    """
+
+    def __init__(self, *args, **kwargs): 
+        super(ShdlcStopContinuousMeasurementBase, self).__init__(
+            0x34, *args, **kwargs
+        )
+
+class ShdlcStopContinuousMeasurement(ShdlcStopContinuousMeasurementBase):
+    """
+    Docstring for ShdlcStopContinuousMeasurement
+    """
+
+    _I2C_STOP_CODE = [0x3F, 0xF9]       # I2C Stop code
+
+    def __init__(self, stop_code):
+        """
+        Constructor.
+
+        :param bytes-like stop_code: I2C stop code (2 bytes).
+        """
+        data = bytearray()
+        data.extend(stop_code)
+        super(ShdlcStopContinuousMeasurement, self).__init__(
+            data=data, max_response_time=0.1,
+            min_response_length=0, max_response_length=0
+        )
+    
+    def interpret_response(self, data):
+        """
+        This command does not expect any response data.
+        """
+        if len(data) != 0:
+            log.warning("Unexpected data received for StopContinuousMeasurement: %s", data)
+        return None
+    
+
 if __name__ == "__main__":
     
     from interface import ShdlcInterface
@@ -247,6 +289,15 @@ if __name__ == "__main__":
     with ShdlcSerialPort(port=port, baudrate=baudrate) as shdlc_port:
         interface = ShdlcInterface(port=shdlc_port)
         
+        i2c_stop_cmd = ShdlcStopContinuousMeasurement(
+            stop_code=ShdlcStopContinuousMeasurement._I2C_STOP_CODE
+        )
+        _, error_state = interface.execute(
+            slave_address=0x00,
+            command=i2c_stop_cmd
+        )
+        print(f"Stopped Continuous Measurement, Error state: {error_state}")
+
         get_version_cmd = ShdlcGetVersion()
         version_info, error_state = interface.execute(
             slave_address=0x00,
