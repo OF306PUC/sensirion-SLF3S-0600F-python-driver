@@ -106,7 +106,7 @@ class ShdlcGetVoltage(ShdlcGetVoltageBase):
     def __init__(self): 
         super(ShdlcGetVoltage, self).__init__(
             data=[], max_response_time=0.1,
-            min_response_length=1, max_response_length=2
+            min_response_length=1, max_response_length=1
         )
 
     def interpret_response(self, data): 
@@ -117,12 +117,7 @@ class ShdlcGetVoltage(ShdlcGetVoltageBase):
         :return int: Sensor voltage in millivolts.
         """
         data_bytes = bytearray(data)  
-        if len(data_bytes) != 2:
-            data_bytes = data_bytes[0]
-        else:
-            data_bytes = (data_bytes[0] << 8) | data_bytes[1]
-            
-        if int(data_bytes) == 0: 
+        if int(data_bytes[0]) == 0: 
             return 3.5
         else: 
             return 5.0
@@ -142,7 +137,7 @@ class ShdlcGetSensorType(ShdlcGetSensorTypeBase):
     def __init__(self): 
         super(ShdlcGetSensorType, self).__init__(
             data=[], max_response_time=0.1,
-            min_response_length=2, max_response_length=2
+            min_response_length=1, max_response_length=1
         )
 
     def interpret_response(self, data): 
@@ -156,8 +151,7 @@ class ShdlcGetSensorType(ShdlcGetSensorTypeBase):
         :return int: Sensor type ID.
         """
         data_bytes = bytearray(data)  
-        data_bytes = (data_bytes[0] << 8) | data_bytes[1]
-        sensor_type = int(data_bytes)
+        sensor_type = int(data_bytes[0])
         if sensor_type == 0: 
             return "Flow Sensor (SF04 based products)"
         elif sensor_type == 1: 
