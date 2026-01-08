@@ -207,4 +207,4 @@ ls data/
 ### Notes
 - The serial polling interval `--sampling-ms` determines the effective serial read frequency  
   `f_rs = 1 / T_rs`.
-- The effective sensor output rate is internally handled by the SCC1 interface and is configured by default to 10 Hz.
+- The effective sensor output rate is internally handled by the default command in the code `shdlc_command.py` and is configured by default to 10 Hz.
