@@ -6,7 +6,7 @@ Robust Data Logger for SLF3S-0600F
 
 ## Overview
 
-This project implements a **robust, long-running data logger** for Sensirion SHDLC-based sensors (e.g. SLF3S-0600F) using:
+This project implements a **long-running data logger** for Sensirion SHDLC-based sensors (e.g. SLF3S-0600F) using:
 
 - SHDLC over RS485 / USB (FTDI)
 - Dual-threaded architecture (acquisition + logging)
@@ -28,23 +28,17 @@ This behavior is achieved using **`nohup`**, which detaches the process from the
 
 ## 1. Connect to the Raspberry Pi
 
-From your host machine:
+From your host machine connect via SSH to the Pi device:
 
 ```bash
 ssh pi@<raspberry_pi_ip>
-```
-
-Or, if you use an SSH config alias:
-
-```bash
-ssh pi10
 ```
 
 ---
 
 ## 2. Verify USB device detection
 
-Plug in the Sensirion SCC1-USB / RS485 adapter.
+Plug in the Sensirion SCC1-USB / RS485 adapter in the Raspberry Pi USB port.
 
 Check that the FTDI driver is loaded automatically:
 
@@ -105,8 +99,11 @@ sensirion-SLF3S-0600F-python-driver/
 ├── core.py
 ├── interface.py
 ├── port.py
+├── shdlc_command.py
 ├── i2c_command.py
 ├── driver_logger.py
+├── sensor_info.py
+├── serial_frame_builder.py
 ├── Temp/
 │   ├── DataLog.csv
 │   ├── DataLog.bin
@@ -116,9 +113,20 @@ sensirion-SLF3S-0600F-python-driver/
 
 ---
 
-## 5. Running the logger (robust against SSH disconnect)
 
-### 5.1 Go to the project directory
+## 5. Running the data-acquisition system
+
+This section describes how to start the Sensirion SLF3S-0600F data logger on a Raspberry Pi and keep it running in the background.
+
+### 5.1 Clone the project
+
+```bash
+git clone https://github.com/OF306PUC/sensirion-SLF3S-0600F-python-driver.git
+```
+
+---
+
+### 5.2 Go to project directory
 
 ```bash
 cd ~/sensirion-SLF3S-0600F-python-driver
@@ -126,22 +134,23 @@ cd ~/sensirion-SLF3S-0600F-python-driver
 
 ---
 
-### 5.2 Start the logger using `nohup`
+### 5.3 Start the logger using `nohup`
+
+The data logger can be executed in the background using `nohup`, allowing the process to continue running even after disconnecting from the SSH session.
 
 ```bash
-nohup python3 shdlc_driver.py   --hours-to-log 12   --sampling-ms 500   > sensirion.log 2>&1 &
+nohup python3 shdlc_driver.py \
+    --hours-to-log 12 \
+    --sampling-ms 500 \
+    > sensirion.log 2>&1 &
 ```
 
-What this does:
-
-- `nohup` prevents the process from receiving `SIGHUP`
-- `&` runs the process in the background
-- Output is redirected to `sensirion.log`
-- The process **continues running after SSH disconnect**
+- All standard output and error messages are redirected to `sensirion.log`.
+- The process **continues running after the SSH session is closed**.
 
 ---
 
-### 5.3 Verify the logger is running
+### 5.4 Verify that the logger is running
 
 ```bash
 pgrep -af shdlc_driver.py
@@ -155,23 +164,19 @@ Example output:
 
 ---
 
-### 5.4 Disconnect SSH safely
-
-You can now close the SSH session:
+### 5.5 Disconnect SSH safely
 
 ```bash
 exit
 ```
 
-The logger will **continue running** on the Raspberry Pi.
+The data logger will continue running on the Raspberry Pi until the specified logging time has elapsed.
 
 ---
 
-## 6. Viewing logs and data
+## 6. Viewing logs and recorded data
 
 ### 6.1 View runtime log
-
-Reconnect via SSH and run:
 
 ```bash
 tail -f sensirion.log
@@ -179,8 +184,27 @@ tail -f sensirion.log
 
 ---
 
-### 6.2 Check data output files
+### 6.2 Access recorded data
+
+Recorded CSV files are stored in the `data/` directory:
 
 ```bash
-ls -lh Temp/
+ls data/
 ```
+
+---
+
+## 7. Command-line arguments configuration
+
+| Argument | Type | Description | Default |
+|--------|------|-------------|---------|
+| `--port` | `str` | Serial port used to communicate with the SCC1-RS485 / SCC1-USB interface | `core.SERIAL_PORT` |
+| `--baudrate` | `int` | Serial communication baud rate | `core.BAUDRATE` |
+| `--slave-address` | `int` | SHDLC slave address of the SCC1 interface | `core.SLAVE_ADDRESS` |
+| `--hours-to-log` | `float` | Total acquisition time, expressed in hours | `core.HOURS_TO_LOG` |
+| `--sampling-ms` | `int` | Serial polling interval in milliseconds | `core.SAMPLING_INTERVAL` |
+
+### Notes
+- The serial polling interval `--sampling-ms` determines the effective serial read frequency  
+  `f_rs = 1 / T_rs`.
+- The effective sensor output rate is internally handled by the SCC1 interface and is configured by default to 10 Hz.

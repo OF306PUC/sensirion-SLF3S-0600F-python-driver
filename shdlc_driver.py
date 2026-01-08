@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 Sensirion SHDLC Driver Module
 - Runs a dual threaded architecture to handle SHDLC communication via serial port.
