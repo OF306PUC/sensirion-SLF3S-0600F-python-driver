@@ -104,7 +104,7 @@ sensirion-SLF3S-0600F-python-driver/
 ├── driver_logger.py
 ├── sensor_info.py
 ├── serial_frame_builder.py
-├── Temp/
+├── Temp/ (Generated)
 │   ├── DataLog.csv
 │   ├── DataLog.bin
 │   └── ErrorLog.txt
@@ -186,10 +186,10 @@ tail -f sensirion.log
 
 ### 6.2 Access recorded data
 
-Recorded CSV files are stored in the `data/` directory:
+Recorded CSV and binary files are stored in the generated `Temp/` directory:
 
 ```bash
-ls data/
+ls Temp/
 ```
 
 ---
