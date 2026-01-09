@@ -16,7 +16,7 @@ HOURS_TO_LOG = 48             # Default logging duration in hours (Accoding to B
 SAMPLING_INTERVAL = 500       # Sampling interval in seconds (10 Hz)
 
 DATA_DIR = "Temp/"
-LOGGER_PATH = "Logs/error_log.txt"
+LOGGER_PATH = "Logs"
 BUFF_QUEUE_MAXSIZE = 100      # Max size of the ring buffer for measurements
 
 # Default scaling factors:
@@ -26,6 +26,11 @@ SCALE_TEMPERATURE = 200.0
 UL_MIN_TO_ML_HR = (60.0 / 1000.0)
 UL_MIN_TO_ML_SEC = (1.0 / 1000.0 / 60.0)
 MIN_TO_SEC = (1.0 / 60.0)
+
+# End of infusion detector params:
+EoI_WINDOW_SIZE = 100          # Number of samples in the sliding window
+EoI_HOLD_SEC = 60              # Hold time in seconds
+EoI_RMS_FLOW_ULMIN_THRESHOLD = 0.05  # uL/min
 
 # >  big-endian
 # d  float64 timestamp

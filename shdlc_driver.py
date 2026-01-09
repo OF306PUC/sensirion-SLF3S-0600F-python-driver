@@ -9,7 +9,7 @@ from shdlc_command import ShdlcStartContinuousMeasurement, \
 from i2c_command import ShdlcCmdI2cTransceive
 from interface import ShdlcInterface
 from port import ShdlcSerialPort
-from driver_logger import ErrorCodes, ErrorLogger, \
+from driver_logger import EndIfInfusionDtector, ErrorCodes, Logger, \
     MeasurementRingBuffer
 
 import os 
@@ -51,8 +51,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def dual_logger(csv_filename, bin_filename, queue, error_logger,
-                sampling_interval=core.SAMPLING_INTERVAL): 
+def dual_logger(csv_filename, bin_filename, queue, end_of_infusion_detector, 
+                logger, sampling_interval=core.SAMPLING_INTERVAL): 
     """
     Threaded CSV-binary logger for SHDLC sensor data.
     - Reads data from a queue and writes to CSV and binary files.
@@ -62,6 +62,9 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
         flush_every_samples = core.FLUSH_EVERY 
         counter = 0
         integrated_volume = 0.0     # accumulated volume in uL
+
+        start_t_utc = None
+        end_t_utc = None
 
         os.makedirs(core.DATA_DIR, exist_ok=True)
         csv_path = os.path.join(core.DATA_DIR, csv_filename)
@@ -76,6 +79,9 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
                 except queue_module.Empty:
                     continue
                 timestamp, flow_raw, temp_raw, flags_raw = item
+
+                if start_t_utc is None:
+                    start_t_utc = timestamp
                 
                 flow_uL_min, temp_c = core.interpret_flow_temp_raw(flow_raw, temp_raw)
                 flag_air, flag_high_flow, exp_smoothing, flags_value = core.interpret_flags_raw(flags_raw)
@@ -83,6 +89,18 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
 
                 flow_raw = core.u16_to_i16(flow_raw)
                 temp_raw = core.u16_to_i16(temp_raw)
+
+                if end_of_infusion_detector.update(flow_uL_min, timestamp):
+                    end_t_utc = timestamp
+                    logger.log(
+                        f"End-of-infusion detected. Stopping. "\
+                        f"start_utc={start_t_utc}, end_utc={end_t_utc}, volume_uL={integrated_volume:.2f}", 
+                        context={
+                            "duration_s": end_t_utc - start_t_utc if start_t_utc and end_t_utc else None,
+                            "integrated_volume_uL": integrated_volume
+                        }
+                    )
+                    stop_logger_event.set()
 
                 # Write CSV record:
                 f_csv.write(f"{timestamp},{flow_uL_min:.4f},{integrated_volume:.4f},{temp_c:.4f}"
@@ -96,7 +114,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
                     f_bin.flush()
 
     except Exception as e:
-        error_logger.log(
+        logger.log_error(
             ErrorCodes.LOGGER_FAILURE, 
             f"Logger encountered an exception: {e}",
         )
@@ -104,7 +122,7 @@ def dual_logger(csv_filename, bin_filename, queue, error_logger,
 
 
 def in_device_communication(
-        port, baudrate, queue, slave_address, error_logger, ring_buffer,
+        port, baudrate, queue, slave_address, logger, ring_buffer,
         hours_to_log=core.HOURS_TO_LOG, sampling_interval=core.SAMPLING_INTERVAL): 
     """
     Threaded SHDLC device communication via serial port.
@@ -174,7 +192,7 @@ def in_device_communication(
                 # data is: (flow_ul_min, temp_c, flag_air, flag_high_flow, exp_smoothing)
                 data, error = interface.execute(slave_address, transceive_cmd)    
                 if error: 
-                    error_logger.log(
+                    logger.log_error(
                         ErrorCodes.SHDLC_ERROR_STATE,
                         "Error state received during measurement read.",
                         context=ring_buffer.snapshot()
@@ -190,7 +208,7 @@ def in_device_communication(
                 try: 
                     queue.put(item, timeout=1.0)
                 except queue_module.Full:
-                    error_logger.log(
+                    logger.log_error(
                         ErrorCodes.QUEUE_FULL,
                         "Data queue is full. Dropping measurement.", 
                         context=ring_buffer.snapshot()
@@ -226,20 +244,24 @@ def main():
     signal.signal(signal.SIGTERM, handle_shutdown)
 
     queue_process = queue_module.Queue(maxsize=core.QUEUE_MAXSIZE)
-    error_logger = ErrorLogger(path=core.LOGGER_PATH)
+    detector = EndIfInfusionDtector(
+        window_size=core.EoI_WINDOW_SIZE, hold_sec=core.EoI_HOLD_SEC, 
+        rms_flow_ulmin_threshold=core.EoI_RMS_FLOW_ULMIN_THRESHOLD
+    )
+    logger = Logger(path=core.LOGGER_PATH)
     ring_buffer = MeasurementRingBuffer(max_size=core.BUFF_QUEUE_MAXSIZE)
 
     t_comm = threading.Thread(
         target=in_device_communication,
         args=(
             serial_port, baudrate, queue_process, slave_address,
-            error_logger, ring_buffer, hours_to_log, sampling_interval_ms,),
+            logger, ring_buffer, hours_to_log, sampling_interval_ms,),
         daemon=True,
     )
     t_logger = threading.Thread(
         target=dual_logger,
-        args=("DataLog.csv", "DataLog.bin", queue_process,
-              error_logger, sampling_interval_ms),
+        args=("DataLog.csv", "DataLog.bin", queue_process, detector,
+              logger, sampling_interval_ms),
         daemon=True,
     )
 
