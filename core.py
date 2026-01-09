@@ -29,7 +29,7 @@ MIN_TO_SEC = (1.0 / 60.0)
 
 # End of infusion detector params:
 EoI_WINDOW_SIZE = 100          # Number of samples in the sliding window
-EoI_HOLD_SEC = 60              # Hold time in seconds
+EoI_HOLD_SEC = 300             # Hold time in seconds
 EoI_RMS_FLOW_ULMIN_THRESHOLD = 0.05  # uL/min
 
 # >  big-endian
