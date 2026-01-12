@@ -4,7 +4,6 @@ import os
 import time  
 
 
-
 class ErrorCodes: 
     SHDLC_ERROR_STATE = None 
     QUEUE_FULL = 1
@@ -65,7 +64,7 @@ class EndIfInfusionDtector:
         self._flow_buffer = deque(maxlen=window_size)
         self._last_non_zero_time = None
 
-    def update(self, flow_ulmin, timestamp) -> bool: 
+    def update(self, timestamp, flow_ulmin) -> bool: 
         """
         Returns True if end-of-infusion is detected.
         
@@ -75,16 +74,16 @@ class EndIfInfusionDtector:
 
         if len(self._flow_buffer) < self._window_size:
             self._last_non_zero_time = None
-            return False  # Not enough data yet
+            return False
         
         rms = (sum(f**2 for f in self._flow_buffer) / len(self._flow_buffer)) ** 0.5
-        near_zero = rms <= self._rms_threshold
+        near_zero = (rms < self._rms_threshold)
 
         if near_zero: 
             if self._last_non_zero_time is None:
                 self._last_non_zero_time = timestamp
             elif (timestamp - self._last_non_zero_time) >= self._hold_sec:
-                return True  # End-of-infusion detected
+                return True
             
         else:
             self._last_non_zero_time = None

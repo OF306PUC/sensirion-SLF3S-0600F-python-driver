@@ -28,9 +28,9 @@ UL_MIN_TO_ML_SEC = (1.0 / 1000.0 / 60.0)
 MIN_TO_SEC = (1.0 / 60.0)
 
 # End of infusion detector params:
-EoI_WINDOW_SIZE = 100          # Number of samples in the sliding window
-EoI_HOLD_SEC = 300             # Hold time in seconds (5 min.)
-EoI_RMS_FLOW_ULMIN_THRESHOLD = 0.05  # uL/min
+EoI_WINDOW_SIZE = 100                # Number of samples in the sliding window
+EoI_HOLD_SEC = 300                   # Hold time in seconds (5 min.)
+EoI_RMS_FLOW_ULMIN_THRESHOLD = 0.09  # uL/min (Empirical threshold for RMS flow rate to consider "near zero" flow)
 
 # >  big-endian
 # d  float64 timestamp

@@ -90,7 +90,7 @@ def dual_logger(csv_filename, bin_filename, queue, end_of_infusion_detector,
                 flow_raw = core.u16_to_i16(flow_raw)
                 temp_raw = core.u16_to_i16(temp_raw)
 
-                if end_of_infusion_detector.update(flow_uL_min, timestamp):
+                if end_of_infusion_detector.update(timestamp=timestamp, flow_ulmin=flow_uL_min):
                     end_t_utc = timestamp
                     logger.log(
                         f"End-of-infusion detected. Stopping. "\
@@ -136,7 +136,7 @@ def in_device_communication(
             stop_code=ShdlcStopContinuousMeasurement._I2C_STOP_CODE
         )
         _, error  = interface.execute(slave_address, i2c_transceive_stop_cmd)
-        print("--- Stopping continuous measurement ---")
+        print("--- (1) Stopping continuous measurement ---")
         if error: 
             print("Error state from stop command:", error)
         print("")
@@ -148,7 +148,7 @@ def in_device_communication(
             i2c_medium_command=ShdlcStartContinuousMeasurement._I2C_MEAS_CMD_MEDIUM_WATER
         )
         _, error  = interface.execute(slave_address, i2c_transceive_start_cmd)
-        print("--- Starting continuous measurement ---")
+        print("--- (2) Starting continuous measurement ---")
         if error: 
             print("Error state from start command:", error)
         print("")
@@ -157,7 +157,7 @@ def in_device_communication(
         # I2C Transceive command to check continuous measurement status
         i2c_transceive_status_cmd = ShdlcGetContinuousMeasurementStatus()
         status_data, error  = interface.execute(slave_address, i2c_transceive_status_cmd)
-        print("--- Continuous Measurement Status ---")
+        print("--- (3) Continuous Measurement Status ---")
         print("Status data received - measurement interval [ms]:", status_data)
         if error: 
             print("Error state from status command:", error)

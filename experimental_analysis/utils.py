@@ -85,10 +85,8 @@ def f(t, y, u):
     V_dot = u 
     return V_dot
 
-def integrate_flow_rate(time, V0, flow_rate_func): 
+def integrate_flow_rate(time, flow_rate_func): 
     volumen = np.zeros_like(time)
-    volumen[0] = V0
-
     for k in range(1, len(time)):
         dt = time[k] - time[k-1]
         u = flow_rate_func[k-1]
