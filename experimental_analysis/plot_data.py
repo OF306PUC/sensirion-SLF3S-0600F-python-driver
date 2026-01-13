@@ -4,12 +4,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-FILE_PATH = "../Temp/DataLog.csv"
+FILE_PATH = "../Temp/15mL_test_1.csv"
 TIME_WINDOW_SEC = 10
 TIME_WINDOW_CORR_SEC = 300
 
-NUM_FLOW_RATE = 5           # mL/hr
-INFUSION_BOMB_VOLUME = 300  # mL
+NUM_FLOW_RATE = 5               # mL/hr
+INFUSION_BOMB_VOLUME = 15      # mL
 
 # Read CSV data:
 # UTC_Time,Flow_ul_min,Volume_uL,DeviceTemperature_degC,Flag_Air,Flag_High_Flow,Exp_Smoothing,Flags_Value
@@ -33,6 +33,9 @@ flow_ul_s = flow_ul_min / 60.0
 integrated_flow_uL = utils.integrate_flow_rate(time=rel_time, flow_rate_func=flow_ul_s)
 integrated_flow_mL = integrated_flow_uL / 1000.0
 
+flow_mL_s_est = INFUSION_BOMB_VOLUME / (rel_time[-1] - rel_time[0])
+volume_mL_est = flow_mL_s_est * rel_time
+
 device_temp_degC = slf3s_0600f_df['DeviceTemperature_degC'].to_numpy()
 
 flag_air = slf3s_0600f_df['Flag_Air'].to_numpy()
@@ -55,6 +58,7 @@ ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
 ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
 fig.autofmt_xdate()
+plt.savefig("flow_rate.pdf", dpi=300)
 plt.show()
 
 
@@ -71,14 +75,18 @@ ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
 ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
 fig.autofmt_xdate()
+plt.savefig("device_temperature.pdf", dpi=300)
 plt.show()
+
 
 
 # Plot integrated volume
 (fig, ax) = plt.subplots(figsize=(8,6))
-ax.step(utc_dt, volume_mL, where='post', label='Dispensed volume', color='green', alpha=0.8)
+ax.step(utc_dt, volume_mL, where='post', label='Dispensed volume', color='blue', alpha=0.8)
 ax.step(utc_dt, integrated_flow_mL, where='post', 
-        label='Integrated flow rate', color='purple', alpha=0.8)
+        label='Integrated flow rate', color='green', alpha=0.8)
+ax.step(utc_dt, volume_mL_est, where='post', 
+        label='Estimated volume (constant flow)', color='red', alpha=0.8)
 ax.axhline(y=INFUSION_BOMB_VOLUME, color='black', linestyle='--', 
            label=f'Infusion bomb volume: {INFUSION_BOMB_VOLUME} mL')
 ax.set_xlabel("Time (UTC)")
@@ -91,6 +99,7 @@ ax.xaxis.set_minor_locator(mdates.MinuteLocator(interval=15))
 ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
 
 fig.autofmt_xdate()
+plt.savefig("dispensed_volume.pdf", dpi=300)
 plt.show()
 
 
@@ -117,6 +126,7 @@ ax.set_xlabel("Flow (mL/hr)")
 ax.set_ylabel("Chip temperature (°C)")
 ax.grid(True)
 
+plt.savefig("flow_temp_correlation.pdf", dpi=300)
 plt.show()
 
 
