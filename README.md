@@ -95,20 +95,25 @@ Example directory layout:
 
 ```
 sensirion-SLF3S-0600F-python-driver/
-├── shdlc_driver.py
-├── core.py
-├── interface.py
-├── port.py
-├── shdlc_command.py
-├── i2c_command.py
-├── driver_logger.py
-├── sensor_info.py
-├── serial_frame_builder.py
-├── Temp/ (Generated)
-│   ├── DataLog.csv
-│   ├── DataLog.bin
-│   └── ErrorLog.txt
-└── README.md
+├── README.md
+└── raspberry/
+    ├── main.py
+    ├── shdlc_driver.py
+    ├── core.py
+    ├── interface.py
+    ├── port.py
+    ├── shdlc_command.py
+    ├── i2c_command.py
+    ├── driver_logger.py
+    ├── sensor_info.py
+    ├── serial_frame_builder.py
+    ├── requirements.txt
+    ├── Temp/ (Generated)
+    │   ├── DataLog.csv
+    │   └── DataLog.bin
+    └── Logs/ (Generated)
+        ├── logs.txt
+        └── error_logs.txt
 ```
 
 ---
@@ -126,20 +131,30 @@ git clone https://github.com/OF306PUC/sensirion-SLF3S-0600F-python-driver.git
 
 ---
 
-### 5.2 Go to project directory
+### 5.2 Go to the `raspberry/` directory
+
+All scripts use implicit relative imports and **must be run from inside `raspberry/`**.
 
 ```bash
-cd ~/sensirion-SLF3S-0600F-python-driver
+cd ~/sensirion-SLF3S-0600F-python-driver/raspberry
 ```
 
 ---
 
-### 5.3 Start the logger using `nohup`
+### 5.3 Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+### 5.5 Start the logger using `nohup`
 
 The data logger can be executed in the background using `nohup`, allowing the process to continue running even after disconnecting from the SSH session.
 
 ```bash
-nohup python3 shdlc_driver.py \
+nohup python3 main.py \
     --hours-to-log 12 \
     --sampling-ms 500 \
     > sensirion.log 2>&1 &
@@ -150,21 +165,21 @@ nohup python3 shdlc_driver.py \
 
 ---
 
-### 5.4 Verify that the logger is running
+### 5.6 Verify that the logger is running
 
 ```bash
-pgrep -af shdlc_driver.py
+pgrep -af main.py
 ```
 
 Example output:
 
 ```
-12345 python3 shdlc_driver.py --hours-to-log 12 --sampling-ms 500
+12345 python3 main.py --hours-to-log 12 --sampling-ms 500
 ```
 
 ---
 
-### 5.5 Disconnect SSH safely
+### 5.7 Disconnect SSH safely
 
 ```bash
 exit
